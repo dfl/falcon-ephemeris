@@ -1,0 +1,51 @@
+{
+  "name": "falcon-ephemeris",
+  "version": "0.1.0",
+  "description": "Clean-room, dual-licensed (AGPL-3.0/commercial) ephemeris: geocentric ecliptic longitudes for Sun–Pluto, Moon, Eris, the major asteroids, Chiron, and the Uranian TNPs, plus house cusps and a corrected ΔT.",
+  "type": "module",
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./ephemeris": "./src/ephemeris-mit.js",
+    "./houses": "./src/house-systems.js",
+    "./delta-t": "./src/delta-t.js",
+    "./asteroid-elements": "./src/asteroid-elements.js"
+  },
+  "files": [
+    "src",
+    "dist",
+    "LICENSE",
+    "LICENSING.md",
+    "THIRD-PARTY.md",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "bundle": "./build/regenerate.sh"
+  },
+  "keywords": [
+    "ephemeris",
+    "astrology",
+    "astronomy",
+    "horoscope",
+    "houses",
+    "planets",
+    "asteroids",
+    "uranian"
+  ],
+  "author": "David Löwenfels",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dfl/falcon-ephemeris.git"
+  },
+  "dependencies": {
+    "astronomy-engine": "^2.1.19"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "vitest": "^2.1.8"
+  }
+}
