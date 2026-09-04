@@ -40,7 +40,7 @@ npm install falcon-ephemeris
 ## Usage
 
 ```js
-import { Ephemeris, houseCusps, obliquity, apparentSiderealTime } from 'falcon-ephemeris';
+import { Ephemeris, houseCusps, ascendant, midheaven, obliquity, apparentSiderealTime } from 'falcon-ephemeris';
 
 // Ecliptic longitudes for a moment + place.
 const eph = new Ephemeris({
@@ -54,19 +54,57 @@ console.log(sun.position.apparentLongitude);   // → 280.30…
 
 `houseCusps` is a pure trig routine: you supply the anchors and it returns the 12
 cusp longitudes. `armc` (the RA of the MC) comes from local apparent sidereal
-time, and `asc`/`mc` are the ecliptic longitudes of the Ascendant/Midheaven —
-`obliquity` and `apparentSiderealTime` give you the pieces:
+time; `ascendant` and `midheaven` give you the `asc`/`mc` anchors as closed-form
+`atan2` (robust in both hemispheres and at high latitude). `obliquity`,
+`apparentSiderealTime`, `ascendant`, and `midheaven` give you every piece:
 
 ```js
 const date = new Date(Date.UTC(1990, 0, 1, 12));
 const eps = obliquity(date);                             // true obliquity of date
 const armc = apparentSiderealTime(date, longitude);      // → RA of the MC
-// derive asc/mc from armc, lat, eps (or take them from the browser bundle's Horoscope), then:
+const mc = midheaven(armc, eps);
+const asc = ascendant(armc, lat, eps);
 const cusps = houseCusps('placidus', { armc, asc, mc, lat, eps });
 ```
 
-For a batteries-included path (birth data in → chart with houses and angles out),
-use the `Horoscope` wrapper from the [browser bundle](#browser-bundle-optional).
+### Chart (`falcon-ephemeris/chart`)
+
+For a batteries-included path — birth data in, a full chart out — use the modern
+`chart()` layer. One async call returns a frozen plain-data object: every body with
+its sign, house, and speed; the four angles; house cusps for any system; and
+aspects. Local wall-clock times are resolved to UTC from the birth place's time
+zone using the platform's built-in `Intl` (no `moment`); zone lookup from lat/lon
+uses the optional `tz-lookup` dependency.
+
+```js
+import { chart } from 'falcon-ephemeris/chart';
+
+const c = await chart({
+  when: '1990-01-01T12:00:00',            // local wall time (or a Date for UTC)
+  place: { lat: 40.7128, lon: -74.0060 }, // zone derived from lat/lon…
+  zone: 'America/New_York',               // …or pass one explicitly
+  houseSystem: 'placidus',                // any of HOUSE_SYSTEMS
+  bodies: 'all',                          // or a subset; default is a common set
+  zodiac: 'sidereal',                     // default 'tropical'
+  ayanamsha: 'lahiri',                    // or 'fagan-bradley' (sidereal only)
+});
+
+c.bodies.sun;        // { longitude, sign, degreesInSign, decan, speed, retrograde, house, … }
+c.angles.ascendant;  // { longitude, sign, degreesInSign, … }  (+ midheaven/descendant/imumCoeli)
+c.houses[0];         // { house: 1, cusp, sign, degreesInSign, … }
+c.aspects[0];        // { a, b, aspect, angle, orb, applying }  — tightest first
+c.meta;              // { utc, zone, julianDay, deltaT, obliquity, siderealTime, houseSystem, … }
+```
+
+`chart` exports `signOf`, `SIGNS`, `findAspects`, `ASPECTS`, `resolveUTC`,
+`ayanamsha`, `AYANAMSHAS`, and `HOUSE_SYSTEMS` alongside it.
+
+`HOUSE_SYSTEMS` covers Placidus, Koch, Campanus, Regiomontanus, Porphyry, Sripati,
+Meridian, Morinus, Vehlow, Equal, Whole-sign, Alcabitius, Topocentric,
+Topocentric-progressive, and Sunshine — validated cusp-for-cusp against Swiss
+Ephemeris (`swetest`) to sub-arcsecond. For a `sidereal` chart, longitudes, angles,
+and cusps are shifted by the Lahiri or Fagan–Bradley ayanamsha; house membership and
+aspect angles are unaffected.
 
 ### Exports
 
@@ -76,9 +114,12 @@ use the `Horoscope` wrapper from the [browser bundle](#browser-bundle-optional).
 | `obliquity(date)` | `src/ephemeris-mit.js` | True obliquity of date (deg) |
 | `apparentSiderealTime(date, lon)` | `src/ephemeris-mit.js` | Local apparent sidereal time (deg) |
 | `houseCusps(system, anchors)` | `src/house-systems.js` | Cusp longitudes for one system |
-| `CUSTOM_HOUSE_SYSTEMS` | `src/house-systems.js` | List of supported systems |
+| `ascendant(armc, lat, eps)` | `src/house-systems.js` | Ascendant ecliptic longitude (closed form) |
+| `midheaven(armc, eps)` | `src/house-systems.js` | Midheaven ecliptic longitude (closed form) |
+| `HOUSE_SYSTEMS` | `src/house-systems.js` | Every system `houseCusps` computes |
 | `deltaTSeconds(jdUt)` | `src/delta-t.js` | Corrected ΔT (TT − UT) in seconds |
 | `ASTEROID_ELEMENTS` | `src/asteroid-elements.js` | Osculating-element table |
+| `chart(options)` | `src/chart/index.js` | Full natal chart (subpath `falcon-ephemeris/chart`) |
 
 ## Accuracy
 
@@ -101,47 +142,32 @@ npm test
 
 ## Browser bundle (optional)
 
-For a self-contained IIFE that also exposes `Origin` / `Horoscope` (timezone, DST,
-sign logic from [CircularNatalHoroscopeJS](https://github.com/0xStarcat/CircularNatalHoroscopeJS)),
-regenerate `dist/ephemeris.bundle.js`:
+For a self-contained IIFE, regenerate `dist/ephemeris.bundle.js`:
 
 ```bash
 npm install            # once, to pull the bundle's build-time deps
 npm run bundle         # esbuild build/browser-entry.js → dist/ephemeris.bundle.js
 ```
 
-This produces a global `AstroEphem` with `{ Origin, Horoscope, Ephemeris,
-obliquity, houseCusps, CUSTOM_HOUSE_SYSTEMS }`. `Origin` + `Horoscope` take birth
-data — a date, the **local** time at the birth place (timezone and DST are derived
-from the coordinates), and latitude/longitude — and return a full chart with
-bodies, signs, angles, and house cusps.
-
-For example, **1 January 1990, 12:00:00 local time, New York City
-(40.7128° N, 74.0060° W)**:
+This produces a global `AstroEphem` exposing `chart` and the rest of the chart layer
+(`signOf`, `findAspects`, `ayanamsha`, `HOUSE_SYSTEMS`, …) plus the core `Ephemeris`,
+`houseCusps`, `ascendant`, `midheaven`, `obliquity`, and `apparentSiderealTime`. The
+bundle inlines `tz-lookup` so coordinate-based timezone resolution works in the
+browser:
 
 ```js
-const { Origin, Horoscope } = AstroEphem;
-
-const origin = new Origin({
-  year: 1990, month: 0, date: 1,       // month is 0-based (0 = January)
-  hour: 12, minute: 0, second: 0,      // local time at the birth place
-  latitude: 40.7128,                   // degrees, N positive / S negative
-  longitude: -74.006,                  // degrees, E positive / W negative
+const c = await AstroEphem.chart({
+  when: '1990-01-01T12:00:00',            // local wall time at the birth place
+  place: { lat: 40.7128, lon: -74.0060 }, // timezone + DST derived from coordinates
+  houseSystem: 'placidus',
 });
-const h = new Horoscope({ origin, houseSystem: 'placidus', zodiac: 'tropical' });
-
-h.CelestialBodies.sun.Sign.label;                              // → 'Capricorn'
-h.CelestialBodies.sun.ChartPosition.Ecliptic.ArcDegreesFormatted30; // → "11° 1' 36''"
-h.Ascendant.ChartPosition.Ecliptic.DecimalDegrees;            // → 20.66
-h.Houses[0].Sign.label;                                       // → 'Aries' (1st-house cusp)
+c.bodies.sun.sign;                 // → 'capricorn'
+c.angles.ascendant.longitude;      // → 274.64
+c.houses[0].sign;                  // → 'capricorn' (1st-house cusp)
 ```
 
-The build has no network step: `Origin`/`Horoscope` come from a pinned, vendored
-copy of CircularNatalHoroscopeJS in [`vendor/cnh/`](./vendor/cnh/README.md) (its
-own ephemeris replaced by this project's engine, plus a few small patches recorded
-in that directory's README), and the rest is this project's own `src/`. The
-vendored source uses extensionless imports, so consume it through a bundler
-(esbuild/Vite) or the prebuilt bundle above rather than bare Node ESM.
+The build has no network step and everything is this project's own `src/` (plus the
+public-domain `tz-lookup`).
 
 ## Regenerating the data tables
 

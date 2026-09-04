@@ -32,7 +32,7 @@ copyright holder.
 
 ## Third-party components
 
-falcon-ephemeris bundles permissively-licensed third-party code (Astronomy
-Engine, CircularNatalHoroscopeJS, and their transitive deps). Those retain their
-own licenses; see [`THIRD-PARTY.md`](./THIRD-PARTY.md). The AGPL applies to the
-original falcon-ephemeris code, not to those components.
+falcon-ephemeris depends on permissively-licensed third-party code (Astronomy
+Engine for positions, and the optional tz-lookup for coordinate-based timezone
+lookup). Those retain their own licenses; see [`THIRD-PARTY.md`](./THIRD-PARTY.md).
+The AGPL applies to the original falcon-ephemeris code, not to those components.

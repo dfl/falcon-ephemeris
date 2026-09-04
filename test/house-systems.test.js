@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { houseCusps, progressivePole } from '../src/house-systems.js';
+import { houseCusps, ascendant, midheaven, progressivePole, HOUSE_SYSTEMS } from '../src/house-systems.js';
 import { HOUSE_FIXTURES } from './house-reference.js';
 
 function angSep(a, b) { let d = ((a - b + 540) % 360) - 180; return Math.abs(d); }
+const arc = (a, b) => ((b - a) % 360 + 540) % 360 - 180;
 
 // Systems we compute and can check directly against reference cusps.
 const CHECKED = ['placidus', 'porphyry', 'sripati', 'meridian', 'morinus', 'vehlow', 'alcabitius', 'topocentric'];
@@ -25,6 +26,59 @@ describe('house systems vs reference cusps', () => {
       }
     });
   }
+});
+
+describe('ascendant / midheaven closed forms vs reference anchors', () => {
+  for (const [chart, fx] of Object.entries(HOUSE_FIXTURES)) {
+    it(`${chart}: asc & mc within 1" of the reference`, () => {
+      expect(angSep(ascendant(fx.armc, fx.lat, fx.eps), fx.asc) * 3600).toBeLessThan(1);
+      expect(angSep(midheaven(fx.armc, fx.eps), fx.mc) * 3600).toBeLessThan(1);
+    });
+  }
+});
+
+describe('quadrant systems — structural invariants', () => {
+  // Koch, Campanus, Regiomontanus and Sunshine have no reference cusps in the fixtures, but every
+  // valid house ring must: open house 1 at the Asc and house 10 at the MC, keep opposite cusps 180°
+  // apart, and advance monotonically around the zodiac (no 180° quadrant flips).
+  const systems = ['koch', 'campanus', 'regiomontanus', 'sunshine'];
+  const orientations = [[0, 44], [47, -20], [123, -0.18], [206.87, 40.71], [305, 63]];
+  for (const sys of systems) {
+    for (const [armc, lat] of orientations) {
+      it(`${sys} @ armc=${armc},lat=${lat}: well-formed ring`, () => {
+        const eps = 23.4392;
+        const asc = ascendant(armc, lat, eps), mc = midheaven(armc, eps);
+        const sunDec = -7; // only used by sunshine
+        const c = houseCusps(sys, { armc, asc, mc, lat, eps, sunDec });
+        expect(angSep(c[0], asc)).toBeLessThan(1e-6);         // cusp 1 = Asc
+        expect(angSep(c[9], mc)).toBeLessThan(1e-6);          // cusp 10 = MC
+        expect(angSep(c[3], (mc + 180) % 360)).toBeLessThan(1e-6);   // cusp 4 = IC
+        expect(angSep(c[6], (asc + 180) % 360)).toBeLessThan(1e-6);  // cusp 7 = Dsc
+        // Sunshine is a solar-arc system: only the angles are opposed, not the intermediate cusps.
+        // The projective systems mirror opposite cusps exactly 180° apart.
+        if (sys !== 'sunshine') {
+          for (let i = 0; i < 6; i++) expect(angSep(c[i], c[i + 6])).toBeCloseTo(180, 6);
+        }
+        for (let i = 0; i < 12; i++) {
+          const step = arc(c[i], c[(i + 1) % 12]);
+          expect(step, `step ${i}`).toBeGreaterThan(0);
+          expect(step).toBeLessThan(180);
+        }
+      });
+    }
+  }
+
+  it("sunshine throws without the Sun's declination", () => {
+    expect(() => houseCusps('sunshine', { armc: 100, asc: 10, mc: 280, lat: 40, eps: 23.44 }))
+      .toThrow(/sunshine.*sunDec/);
+  });
+
+  it('HOUSE_SYSTEMS lists every system houseCusps computes', () => {
+    const anchors = { armc: 100, lat: 40, eps: 23.44, sunDec: -7 };
+    anchors.mc = midheaven(anchors.armc, anchors.eps);
+    anchors.asc = ascendant(anchors.armc, anchors.lat, anchors.eps);
+    for (const sys of HOUSE_SYSTEMS) expect(houseCusps(sys, anchors), sys).toHaveLength(12);
+  });
 });
 
 describe('topocentric-progressive', () => {

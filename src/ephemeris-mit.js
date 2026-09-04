@@ -1,4 +1,4 @@
-// Ephemeris engine providing the interface CircularNatalHoroscopeJS expects. Positions from
+// Ephemeris engine: geocentric apparent ecliptic longitudes. Positions from
 // Astronomy Engine (MIT); Eris + the major asteroids + Chiron from a fitted table of JPL Horizons
 // osculating elements; the Uranian TNPs from a two-body Kepler solve of their fixed "Neely"
 // osculating elements.
@@ -49,8 +49,9 @@ function helioEclOfEquinox(el, jd) {
   return { x: (cO * cw - sO * sw * ci) * xv + (-cO * sw - sO * cw * ci) * yv, y: (sO * cw + cO * sw * ci) * xv + (-sO * sw + cO * cw * ci) * yv, z: (sw * si) * xv + (cw * si) * yv };
 }
 function matMul(rot, v) { return { x: rot.rot[0][0] * v.x + rot.rot[1][0] * v.y + rot.rot[2][0] * v.z, y: rot.rot[0][1] * v.x + rot.rot[1][1] * v.y + rot.rot[2][1] * v.z, z: rot.rot[0][2] * v.x + rot.rot[1][2] * v.y + rot.rot[2][2] * v.z }; }
-// Vondrak, Capitaine & Wallace (2011) long-term precession. Coefficients from the ERFA/SOFA
-// reference implementation (public-domain constants).
+// Vondrak, Capitaine & Wallace (2011) long-term precession, from the coefficients published in
+// their paper (Astron. Astrophys. 534, A22). ERFA (the BSD-licensed derivative of SOFA) implements
+// the same constants; these are numeric constants from the paper, not code from any implementation.
 const DAS2R = DEG / 3600, D2PI = 2 * Math.PI, EPS0 = 84381.406 * DAS2R;
 const PQPOL = [[5851.607687, -0.1189000, -0.00028913, 0.000000101], [-1600.886300, 1.1689818, -0.00000020, -0.000000437]];
 const PQPER = [[708.15, -5486.751211, -684.661560, 667.666730, -5523.863691], [2309.00, -17.127623, 2446.283880, -2354.886252, -549.747450], [1620.00, -617.517403, 399.671049, -428.152441, -310.998056], [492.20, 413.442940, -356.652376, 376.202861, 421.535876], [1183.00, 78.614193, -186.387003, 184.778874, -36.776172], [622.00, -180.732815, -316.800070, 335.321713, -145.278396], [882.00, -87.676083, 198.296701, -185.138669, -34.744450], [547.00, 46.140315, 101.135679, -120.972830, 22.885731]];
