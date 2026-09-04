@@ -36,13 +36,16 @@ describe('chart — deterministic UTC natal', () => {
     expect(c.houses[9].cusp).toBeCloseTo(c.angles.midheaven.longitude, 9);
   });
 
-  it('marks the mean node retrograde and node/anti-node exactly opposed', async () => {
+  it('marks the mean node retrograde and suppresses the node/anti-node opposition by default', async () => {
     const c = await chart({ when: UTC_1990, place: NY });
     expect(c.bodies.northNode.retrograde).toBe(true);
     expect(c.bodies.northNode.speed).toBeLessThan(0);
-    const nn = c.aspects.find(a =>
-      (a.a === 'northNode' && a.b === 'southNode') || (a.a === 'southNode' && a.b === 'northNode'));
-    expect(nn?.aspect).toBe('opposition');
+    const nodePair = a => [a.a, a.b].includes('northNode') && [a.a, a.b].includes('southNode');
+    // The node/anti-node axis opposition is a geometric identity → suppressed unless redundant:true.
+    expect(c.aspects.some(nodePair)).toBe(false);
+    const withRedundant = await chart({ when: UTC_1990, place: NY, aspects: { redundant: true } });
+    const nn = withRedundant.aspects.find(nodePair);
+    expect(nn.aspect).toBe('opposition');
     expect(nn.orb).toBeCloseTo(0, 4);
   });
 

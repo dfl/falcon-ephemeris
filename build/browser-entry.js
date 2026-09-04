@@ -5,6 +5,7 @@
 export {
   chart, HOUSE_SYSTEMS, AYANAMSHAS,
   signOf, SIGNS, findAspects, ASPECTS, ayanamsha, resolveUTC,
+  midpoint, midpoints, midpointPictures,
 } from '../src/chart/index.js';
 export { default as Ephemeris, obliquity, apparentSiderealTime } from '../src/ephemeris-mit.js';
 export { houseCusps, ascendant, midheaven } from '../src/house-systems.js';

@@ -7,6 +7,7 @@ import { houseCusps, ascendant, midheaven, HOUSE_SYSTEMS } from '../house-system
 import { deltaTSeconds } from '../delta-t.js';
 import { signOf } from './signs.js';
 import { findAspects } from './aspects.js';
+import { midpointPictures } from './midpoints.js';
 import { resolveUTC } from './timezone.js';
 import { ayanamsha as ayanamshaOf } from './ayanamsha.js';
 
@@ -85,13 +86,15 @@ function parseWhen(when) {
  * @param {string} [opts.zone]              Explicit IANA zone (skips lat/lon zone lookup).
  * @param {string} [opts.houseSystem='placidus']  Any of HOUSE_SYSTEMS.
  * @param {string[]|'all'} [opts.bodies]    Points to include (default DEFAULT_BODIES).
- * @param {object|false} [opts.aspects]     Aspect options ({minors,orbs,maxOrb}) or false to skip.
+ * @param {object|false} [opts.aspects]     Aspect options ({minors,orbs,maxOrb,redundant,harmonics,harmonicOrb}) or false to skip.
+ * @param {object|boolean} [opts.midpoints]  Midpoint-picture options ({orb,modulus}) or true for
+ *                                          defaults; omitted/false → no midpoints computed.
  * @param {string} [opts.zodiac='tropical'] 'tropical' or 'sidereal'.
  * @param {string} [opts.ayanamsha='lahiri'] Sidereal mode ('lahiri' | 'fagan-bradley'); used only
  *                                          when zodiac is 'sidereal'.
- * @returns {Promise<object>} Frozen chart: { meta, bodies, angles, houses, aspects }.
+ * @returns {Promise<object>} Frozen chart: { meta, bodies, angles, houses, aspects, midpoints }.
  */
-export async function chart({ when, place, zone, houseSystem = 'placidus', bodies, aspects = {}, zodiac = 'tropical', ayanamsha = 'lahiri' } = {}) {
+export async function chart({ when, place, zone, houseSystem = 'placidus', bodies, aspects = {}, midpoints = false, zodiac = 'tropical', ayanamsha = 'lahiri' } = {}) {
   if (!HOUSE_SYSTEMS.includes(houseSystem)) {
     throw new Error(`chart: unknown houseSystem "${houseSystem}" (one of ${HOUSE_SYSTEMS.join(', ')})`);
   }
@@ -165,15 +168,26 @@ export async function chart({ when, place, zone, houseSystem = 'placidus', bodie
   }
   const bodiesOut = Object.freeze(out);
 
-  // 5. Aspects among bodies (and the two main angles, when present).
+  // Points for aspects & midpoints: bodies plus the two main angles (tropical — both are
+  // shift-invariant, so a sidereal chart uses the same math and shifts only the displayed longitude).
+  const pts = [...aspectPoints];
+  if (angles) {
+    pts.push({ key: 'ascendant', longitude: ascTrop });
+    pts.push({ key: 'midheaven', longitude: mcTrop });
+  }
+
+  // 5. Aspects among those points.
   let aspectsOut = [];
   if (aspects !== false) {
-    const pts = [...aspectPoints];
-    if (angles) {
-      pts.push({ key: 'ascendant', longitude: ascTrop });   // tropical; aspects are shift-invariant
-      pts.push({ key: 'midheaven', longitude: mcTrop });
-    }
     aspectsOut = findAspects(pts, aspects === true ? {} : aspects);
+  }
+
+  // 6. Midpoint pictures (apex = a/b), opt-in. Relationships are frame-invariant; only the reported
+  // midpoint longitude carries the ayanamsha.
+  let midpointsOut = [];
+  if (midpoints) {
+    midpointsOut = midpointPictures(pts, midpoints === true ? {} : midpoints)
+      .map(m => Object.freeze({ ...m, longitude: toZ(m.longitude) }));
   }
 
   const meta = Object.freeze({
@@ -189,10 +203,11 @@ export async function chart({ when, place, zone, houseSystem = 'placidus', bodie
     place: place ? Object.freeze({ lat, lon }) : null,
   });
 
-  return Object.freeze({ meta, bodies: bodiesOut, angles, houses, aspects: Object.freeze(aspectsOut) });
+  return Object.freeze({ meta, bodies: bodiesOut, angles, houses, aspects: Object.freeze(aspectsOut), midpoints: Object.freeze(midpointsOut) });
 }
 
 export { signOf, SIGNS } from './signs.js';
-export { findAspects, ASPECTS } from './aspects.js';
+export { findAspects, ASPECTS, REDUNDANT_PAIRS } from './aspects.js';
+export { midpoint, midpoints, midpointPictures } from './midpoints.js';
 export { resolveUTC } from './timezone.js';
 export { ayanamsha, AYANAMSHAS, toSidereal } from './ayanamsha.js';

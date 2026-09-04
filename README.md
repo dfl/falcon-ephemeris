@@ -87,17 +87,19 @@ const c = await chart({
   bodies: 'all',                          // or a subset; default is a common set
   zodiac: 'sidereal',                     // default 'tropical'
   ayanamsha: 'lahiri',                    // or 'fagan-bradley' (sidereal only)
+  midpoints: { orb: 1.5, modulus: 90 },   // opt-in; omit for none
 });
 
 c.bodies.sun;        // { longitude, sign, degreesInSign, decan, speed, retrograde, house, … }
 c.angles.ascendant;  // { longitude, sign, degreesInSign, … }  (+ midheaven/descendant/imumCoeli)
 c.houses[0];         // { house: 1, cusp, sign, degreesInSign, … }
 c.aspects[0];        // { a, b, aspect, angle, orb, applying }  — tightest first
+c.midpoints[0];      // { apex, a, b, aspect, longitude, orb }  — "apex = a/b" pictures
 c.meta;              // { utc, zone, julianDay, deltaT, obliquity, siderealTime, houseSystem, … }
 ```
 
-`chart` exports `signOf`, `SIGNS`, `findAspects`, `ASPECTS`, `resolveUTC`,
-`ayanamsha`, `AYANAMSHAS`, and `HOUSE_SYSTEMS` alongside it.
+`chart` exports `signOf`, `SIGNS`, `findAspects`, `ASPECTS`, `midpoint`, `midpoints`,
+`midpointPictures`, `resolveUTC`, `ayanamsha`, `AYANAMSHAS`, and `HOUSE_SYSTEMS`.
 
 `HOUSE_SYSTEMS` covers Placidus, Koch, Campanus, Regiomontanus, Porphyry, Sripati,
 Meridian, Morinus, Vehlow, Equal, Whole-sign, Alcabitius, Topocentric,
@@ -105,6 +107,14 @@ Topocentric-progressive, and Sunshine — validated cusp-for-cusp against Swiss
 Ephemeris (`swetest`) to sub-arcsecond. For a `sidereal` chart, longitudes, angles,
 and cusps are shifted by the Lahiri or Fagan–Bradley ayanamsha; house membership and
 aspect angles are unaffected.
+
+**Aspects & midpoints.** `findAspects` runs a fixed table (Ptolemaic by default,
+`minors: true` to add the rest) or a harmonic sweep (`harmonics: [1,2,3,4,6]`, orb
+scaled as `harmonicOrb / harmonic`). The degenerate opposition between an axis pair
+(nodes, Asc/Desc, MC/IC) is suppressed unless `redundant: true`. `midpointPictures`
+finds cosmobiology "apex = a/b" pictures on a modulus dial — `modulus: 90` (the
+default) counts conjunction, square, and opposition to a midpoint; `45` adds the
+semisquare octave; `180`/`360` narrow it.
 
 ### Exports
 
