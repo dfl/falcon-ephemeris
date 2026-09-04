@@ -111,12 +111,37 @@ npm run bundle         # esbuild build/browser-entry.js → dist/ephemeris.bundl
 ```
 
 This produces a global `AstroEphem` with `{ Origin, Horoscope, Ephemeris,
-obliquity, houseCusps, CUSTOM_HOUSE_SYSTEMS }`.
+obliquity, houseCusps, CUSTOM_HOUSE_SYSTEMS }`. `Origin` + `Horoscope` take birth
+data — a date, the **local** time at the birth place (timezone and DST are derived
+from the coordinates), and latitude/longitude — and return a full chart with
+bodies, signs, angles, and house cusps.
+
+For example, **1 January 1990, 12:00:00 local time, New York City
+(40.7128° N, 74.0060° W)**:
+
+```js
+const { Origin, Horoscope } = AstroEphem;
+
+const origin = new Origin({
+  year: 1990, month: 0, date: 1,       // month is 0-based (0 = January)
+  hour: 12, minute: 0, second: 0,      // local time at the birth place
+  latitude: 40.7128,                   // degrees, N positive / S negative
+  longitude: -74.006,                  // degrees, E positive / W negative
+});
+const h = new Horoscope({ origin, houseSystem: 'placidus', zodiac: 'tropical' });
+
+h.CelestialBodies.sun.Sign.label;                              // → 'Capricorn'
+h.CelestialBodies.sun.ChartPosition.Ecliptic.ArcDegreesFormatted30; // → "11° 1' 36''"
+h.Ascendant.ChartPosition.Ecliptic.DecimalDegrees;            // → 20.66
+h.Houses[0].Sign.label;                                       // → 'Aries' (1st-house cusp)
+```
 
 The build has no network step: `Origin`/`Horoscope` come from a pinned, vendored
 copy of CircularNatalHoroscopeJS in [`vendor/cnh/`](./vendor/cnh/README.md) (its
 own ephemeris replaced by this project's engine, plus a few small patches recorded
-in that directory's README), and the rest is this project's own `src/`.
+in that directory's README), and the rest is this project's own `src/`. The
+vendored source uses extensionless imports, so consume it through a bundler
+(esbuild/Vite) or the prebuilt bundle above rather than bare Node ESM.
 
 ## Regenerating the data tables
 
