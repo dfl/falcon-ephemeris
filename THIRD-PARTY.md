@@ -4,8 +4,8 @@ falcon-ephemeris is built from the permissively-licensed components below.
 
 The core library (`src/`) depends only on **Astronomy Engine** at runtime. The
 optional browser bundle (`build/regenerate.sh` → `dist/ephemeris.bundle.js`) also
-pulls in **CircularNatalHoroscopeJS** for timezone/DST, sign logic, and the
-`Origin`/`Horoscope` convenience wrappers.
+includes a pinned, vendored copy of **CircularNatalHoroscopeJS** (`vendor/cnh/`)
+for timezone/DST, sign logic, and the `Origin`/`Horoscope` convenience wrappers.
 
 ## Bundled code
 
@@ -16,18 +16,20 @@ https://github.com/cosinekitty/astronomy
 
 ### CircularNatalHoroscopeJS — The Unlicense (public domain)
 Timezone/DST derivation, house cusps, Ascendant/Midheaven, sign logic.
-Used with modifications: its bundled ephemeris is replaced by our engine
+Vendored in `vendor/cnh/` (pinned to upstream commit `76e150f`, v1.1.0) with
+modifications: its bundled ephemeris is replaced by our engine
 (`src/ephemeris-mit.js`); Chiron/Sirius removed from the body list; a
-seconds-handling fix in `hourTimeToDecimal`; added display labels.
+seconds-handling fix in `hourTimeToDecimal`; precise obliquity/sidereal-time
+anchors; added display labels. See `vendor/cnh/README.md` for the full list.
 https://github.com/0xStarcat/CircularNatalHoroscopeJS
 
 ### moment and moment-timezone — MIT
-Date/time and historical-timezone handling (transitive, via CircularNatalHoroscopeJS).
+Date/time and historical-timezone handling (build-time dep of the vendored CircularNatalHoroscopeJS).
 Copyright (c) JS Foundation and other contributors
 https://github.com/moment/moment
 
 ### tz-lookup — CC0-1.0 (public domain)
-Latitude/longitude to IANA timezone (transitive, via CircularNatalHoroscopeJS).
+Latitude/longitude to IANA timezone (build-time dep of the vendored CircularNatalHoroscopeJS).
 https://github.com/darkskyapp/tz-lookup
 
 The MIT License text (applies to Astronomy Engine, moment, moment-timezone):

@@ -106,11 +106,17 @@ sign logic from [CircularNatalHoroscopeJS](https://github.com/0xStarcat/Circular
 regenerate `dist/ephemeris.bundle.js`:
 
 ```bash
-./build/regenerate.sh   # clones CircularNatal, applies build/patch-cnh.js, bundles with esbuild
+npm install            # once, to pull the bundle's build-time deps
+npm run bundle         # esbuild build/browser-entry.js → dist/ephemeris.bundle.js
 ```
 
 This produces a global `AstroEphem` with `{ Origin, Horoscope, Ephemeris,
 obliquity, houseCusps, CUSTOM_HOUSE_SYSTEMS }`.
+
+The build has no network step: `Origin`/`Horoscope` come from a pinned, vendored
+copy of CircularNatalHoroscopeJS in [`vendor/cnh/`](./vendor/cnh/README.md) (its
+own ephemeris replaced by this project's engine, plus a few small patches recorded
+in that directory's README), and the rest is this project's own `src/`.
 
 ## Regenerating the data tables
 

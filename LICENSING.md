@@ -19,8 +19,7 @@ If that works for your project, you need do nothing further.
 
 If you want to embed falcon-ephemeris in a **closed-source** product, or in a
 network service without publishing your source, a separate permissive license is
-available from the copyright holder. Contact David Löwenfels
-<otterpupp@gmail.com>.
+available from the copyright holder. Contact David Lowenfels at gmail.
 
 ## Author's own use
 
