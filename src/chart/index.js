@@ -3,7 +3,7 @@
 // any system falcon supports, and aspects. Depends only on falcon's own src/ plus tz-lookup.
 
 import Ephemeris, { obliquity, apparentSiderealTime } from '../ephemeris-mit.js';
-import { houseCusps, ascendant, midheaven, HOUSE_SYSTEMS } from '../house-systems.js';
+import { houseCusps, ascendant, midheaven, vertex, HOUSE_SYSTEMS } from '../house-systems.js';
 import { deltaTSeconds } from '../delta-t.js';
 import { signOf } from './signs.js';
 import { findAspects } from './aspects.js';
@@ -36,6 +36,7 @@ function pointLongitudes(eph) {
     m.lilith = moon.orbit.meanApogee.apparentLongitude;
     m.priapus = moon.orbit.meanPerigee.apparentLongitude;
   }
+  m.ariesPoint = 0;   // the tropical Aries Point (0° Aries) — a fixed sensitive point, not a body
   return m;
 }
 
@@ -132,12 +133,15 @@ export async function chart({ when, place, zone, houseSystem = 'placidus', bodie
     const asc = ascendant(armc, lat, eps);
     const mc = midheaven(armc, eps);
     ascTrop = asc; mcTrop = mc;   // tropical anchors for shift-invariant aspect math
+    const vx = vertex(armc, lat, eps);
     const angle = (key, l) => { const z = toZ(l); return Object.freeze({ key, longitude: z, ...signOf(z) }); };
     angles = Object.freeze({
       ascendant: angle('ascendant', asc),
       midheaven: angle('midheaven', mc),
       descendant: angle('descendant', norm360(asc + 180)),
       imumCoeli: angle('imumCoeli', norm360(mc + 180)),
+      vertex: angle('vertex', vx),
+      antivertex: angle('antivertex', norm360(vx + 180)),
     });
     // Sun's declination (the Sun sits on the ecliptic, β≈0), needed by the Sunshine system.
     const DEG = Math.PI / 180;
@@ -209,5 +213,6 @@ export async function chart({ when, place, zone, houseSystem = 'placidus', bodie
 export { signOf, SIGNS } from './signs.js';
 export { findAspects, ASPECTS, REDUNDANT_PAIRS } from './aspects.js';
 export { midpoint, midpoints, midpointPictures } from './midpoints.js';
+export { spaceAngles } from './layout.js';
 export { resolveUTC } from './timezone.js';
 export { ayanamsha, AYANAMSHAS, toSidereal } from './ayanamsha.js';

@@ -31,6 +31,7 @@ function houseRun(c, letter) {
     else if ((m = line.match(/^ARMC\s+(.+?)\s{2,}/))) anchors.armc = dms(m[1]);
     else if ((m = line.match(/^Ascendant\s+(.+?)\s{2,}/))) anchors.asc = dms(m[1]);
     else if ((m = line.match(/^MC\s+(.+?)\s{2,}/))) anchors.mc = dms(m[1]);
+    else if ((m = line.match(/^Vertex\s+(.+?)\s{2,}/))) anchors.vertex = dms(m[1]);
     else if ((m = line.match(/^house\s+(\d+)\s+(.+?)\s{2,}/))) cusps[+m[1]-1] = dms(m[2]);
   }
   return { anchors, cusps };

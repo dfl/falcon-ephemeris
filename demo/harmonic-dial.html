@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meridian Clock — Falcon Ephemeris</title>
+</head>
+<body>
+<!-- BEGIN ARTIFACT BODY -->
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #10141d; --ink: #e7e3d8; --muted: #8792a6;
+    --line: #2a313f; --line-soft: #1b212c;
+    --brass: #d4a94a; --cool: #79aec6; --violet: #9d8ec9;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f3efe4; --panel: #fbf9f3; --ink: #22252c; --muted: #6b7280;
+      --line: #d8d0bf; --line-soft: #e7e1d3;
+      --brass: #a5791f; --cool: #2f6f8c; --violet: #6b5aa0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0e14; --panel: #10141d; --ink: #e7e3d8; --muted: #8792a6;
+    --line: #2a313f; --line-soft: #1b212c;
+    --brass: #d4a94a; --cool: #79aec6; --violet: #9d8ec9;
+  }
+  :root[data-theme="light"] {
+    --bg: #f3efe4; --panel: #fbf9f3; --ink: #22252c; --muted: #6b7280;
+    --line: #d8d0bf; --line-soft: #e7e1d3;
+    --brass: #a5791f; --cool: #2f6f8c; --violet: #6b5aa0;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1.1rem; padding: clamp(.75rem, 3vw, 2rem);
+  }
+  .eyebrow {
+    font-size: 1.05rem; letter-spacing: .01em; color: var(--ink); font-weight: 600; text-align: center;
+  }
+  .eyebrow span { color: var(--muted); font-weight: 400; }
+
+  .stage { display: flex; gap: clamp(1rem, 3vw, 2.4rem); align-items: center; justify-content: center; flex-wrap: wrap; width: 100%; }
+  .dial-wrap { width: min(80vmin, 560px); aspect-ratio: 1; position: relative; }
+  .mp-panel { width: min(230px, 84vw); align-self: flex-start; background: var(--panel);
+              border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .mp-apex { display: flex; align-items: center; gap: .5rem; min-height: 2.3rem;
+             padding: .5rem .6rem; border-bottom: 1px solid var(--line); }
+  .mp-apex svg { width: 18px; height: 18px; }
+  .mp-apex-deg { font-family: ui-monospace, "SF Mono", monospace; color: var(--ink);
+                 font-variant-numeric: tabular-nums; letter-spacing: .02em; font-size: .92rem; }
+  .mp-apex-sep { color: var(--muted); margin: 0 -.15rem; }
+  .mp-apex.free { color: var(--muted); font-family: ui-monospace, monospace; font-size: .8rem; }
+  .mp-scroll { max-height: min(64vmin, 470px); overflow-y: auto; }
+  .mp-table { width: 100%; border-collapse: collapse; text-align: left;
+              font-family: ui-monospace, "SF Mono", monospace; font-size: .8rem; }
+  .mp-table thead th { position: sticky; top: 0; background: var(--panel); text-align: left;
+                       font-size: .62rem; text-transform: uppercase; letter-spacing: .14em; color: var(--muted);
+                       font-weight: 600; padding: .5rem .55rem; border-bottom: 1px solid var(--line); }
+  .mp-table td { padding: .2rem .55rem; }
+  .mp-table tbody tr + tr td { border-top: 1px solid var(--line-soft); }
+  .mp-type { color: var(--muted); text-align: center; width: 1.4em; }
+  .mp-type.sq { color: var(--brass); }
+  .mp-pair { color: var(--ink); letter-spacing: .04em; text-align: center; }
+  .mp-table thead th.col-pair { text-align: center; }
+  .mp-orb { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .mp-empty { color: var(--muted); }
+  svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  svg.dragging, svg.dragging * { cursor: grabbing; }
+  text { font-family: system-ui, sans-serif; }
+
+  /* Movable pointer + the midpoint chords it selects. Only the pointer is a drag handle. */
+  .pointer-axis { stroke: var(--brass); stroke-width: 1.4; opacity: .7; cursor: grab; }
+  .pointer-knob { fill: var(--brass); cursor: grab; }
+  .pointer-grab { cursor: grab; }
+  .chord { stroke: var(--brass); stroke-width: 1; fill: none; }   /* stroke-opacity set per chord by orb */
+
+  .tick { stroke: var(--line); }   /* small, medium and major ticks share one colour; only length differs */
+  .ring { fill: none; stroke: var(--line); }
+  .ring.inner { stroke: var(--line-soft); }
+
+  .skewer { stroke-width: .7; opacity: .55; }              /* neck: dot → glyph, in body colour */
+  .pointer { stroke-width: 1.6; }                          /* colour tick on the outer scale */
+  .dot { stroke: var(--bg); stroke-width: .5; }
+  .hub-bg { fill: var(--bg); opacity: .82; }
+
+  /* Inline SVG body glyphs (paths fill via currentColor → colour set inline per body). */
+  .g { color: var(--ink); cursor: pointer; }
+  /* Angle lettermarks (A / M) render as text. */
+  .glyph { font-size: 18px; font-weight: 700; text-anchor: middle; dominant-baseline: central;
+           fill: var(--ink); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; cursor: pointer; }
+
+  .hit { cursor: pointer; }
+  .mc-mark { stroke: var(--muted); stroke-width: 2; }
+  .mc-cap  { fill: var(--muted); font-size: 15px; font-weight: 700; text-anchor: middle; letter-spacing: .1em; }
+
+  .hub-time { fill: var(--ink); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+              font-size: 34px; text-anchor: middle; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+  .hub-sub  { fill: var(--muted); font-size: 10px; text-anchor: middle; letter-spacing: .08em; }
+  .hub-tag  { fill: var(--brass); font-size: 8.5px; text-anchor: middle; letter-spacing: .2em; text-transform: uppercase; }
+
+  .foot { display: flex; gap: 1.2rem; align-items: center; flex-wrap: wrap; justify-content: center;
+          font-size: .78rem; color: var(--muted); }
+  .foot .loc { color: var(--ink); font-variant-numeric: tabular-nums; }
+  button.locate {
+    font: inherit; font-size: .76rem; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 999px; padding: .3em .8em; cursor: pointer;
+  }
+  button.locate:hover { border-color: var(--brass); }
+  button.locate:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .qh { display: inline-flex; align-items: center; gap: .28em; cursor: pointer; user-select: none;
+        text-transform: none; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+  .qh input { width: .9em; height: .9em; margin: 0; accent-color: var(--brass); cursor: pointer; }
+</style>
+
+<div class="eyebrow">Meridian Clock <span>by Falcon Ephemeris</span></div>
+
+<div class="stage">
+  <div class="dial-wrap">
+    <svg id="dial" viewBox="0 0 440 440" role="img" aria-label="90-degree harmonic dial for the current time and place"></svg>
+  </div>
+  <aside class="mp-panel">
+    <div class="mp-apex" id="mp-apex"></div>
+    <div class="mp-scroll">
+      <table class="mp-table">
+        <thead><tr>
+          <th class="col-type"><label class="qh"><input type="checkbox" id="quadrant" checked>22.5</label></th>
+          <th class="col-pair">Midpoint</th><th class="col-orb">Orb</th>
+        </tr></thead>
+        <tbody id="mp-list"></tbody>
+      </table>
+    </div>
+  </aside>
+</div>
+
+<div class="foot">
+  <span class="loc" id="loc">locating…</span>
+  <button class="locate" id="locateBtn" type="button">◎ use my location</button>
+</div>
+
+<script src="../dist/ephemeris.bundle.js"></script>
+<script id="glyph-data" type="application/json">
+{"sun":{"vb":"-10 0 694 1000","d":"M312 406q46 -7 60.5 -1.5t37.5 37.5q41 55 -3 100q-32 32 -67.5 32.5t-67.5 -32.5q-15 -15 -18.5 -25t-0.5 -31q6 -32 22.5 -54.5t36.5 -25.5zM39 332q0 -3 8.5 -17t26 -35.5t40.5 -44t57.5 -44.5t70.5 -35q43 -14 117 -11q91 5 151 41.5t114 122.5q38 60 47 155t-18 151 q-39 80 -80.5 120t-124.5 77q-32 14 -106 15t-103 -12t-57 -24q-25 -10 -70 -52t-59 -68q-31 -61 -37 -87.5t-6 -95.5q0 -92 14.5 -120.5t14.5 -35.5zM414 211q-35 -19 -114 -6.5t-112 42.5q-31 27 -60.5 58t-29.5 36q0 7 -17 44q-18 39 -17.5 102t19.5 110q18 45 61 89.5 t88 66.5q48 23 107 23.5t107 -22.5q42 -19 85 -62.5t63 -86.5q21 -47 21.5 -108.5t-19.5 -115.5q-17 -43 -63 -94.5t-75 -58.5q-22 -5 -44 -17z"},"moon":{"vb":"-10 0 503 1000","d":"M38 165q42 -21 129 -10.5t142 42.5q26 15 81 71.5t55 67.5q0 7 19 34q13 17 16 37t2 85q0 65 -3.5 87.5t-18.5 53.5q-26 53 -70 99t-93 70q-41 20 -62.5 23.5t-95.5 3.5q-101 0 -111 -10q-5 -4 -5.5 -6.5t3 -4.5t8.5 -3.5t13 -5t15 -8.5q12 -8 29 -15q21 -9 61.5 -47.5 t57.5 -64.5q30 -47 39.5 -104t2 -102t-17 -76t-17.5 -40q-11 -13 -16 -26q-9 -26 -73.5 -69t-102.5 -49q-29 -4 -6 -22q7 -5 19 -11zM276 243q-18 -11 -35 -15t-27 -1.5t-10 12t14 18t20 21.5q19 42 39 66q12 15 23.5 65.5t11.5 88.5q-1 68 -24 133t-60 102q-24 24 -24 33 q0 7 11.5 8.5t27.5 -3t27 -13.5q21 -16 30 -16q10 -1 46 -37.5t48 -58.5q34 -63 33.5 -144.5t-34.5 -147.5q-13 -24 -49.5 -59t-67.5 -52z"},"mercury":{"vb":"-10 0 427 1000","d":"M314 162q24 -24 30.5 -26t20.5 11q29 25 -2 59q-14 14 -14 19t11 18q29 34 38 62.5t9 84.5q0 72 -18 112q-15 33 -46 61t-60 34q-26 5 -35.5 17t-7.5 38l3 27l67 4q47 3 57 6.5t12 18.5q4 22 -12 30t-68 12l-64 4l-1 26q-1 31 -8 42.5t-22 9.5q-12 -2 -15.5 -9t-3.5 -28 q0 -35 -5.5 -41t-66.5 -7l-62 -1v-58l125 -9v-32q0 -22 -5 -29t-28 -16q-38 -15 -60 -33t-45 -54q-20 -32 -24 -49t-4 -74t4 -74t24 -46l27 -40l-14 -27q-22 -41 -2.5 -54.5t56.5 17.5q24 20 38 23t68 2q54 -2 68 -6t35 -25zM265 253q-36 -16 -73 -8.5t-67.5 27.5t-50 54.5 t-19.5 73.5q0 45 26 83.5t72 61.5q44 22 94.5 7.5t81.5 -58.5q15 -21 18.5 -37.5t3.5 -62.5q0 -50 -4 -63t-25 -36q-29 -30 -57 -42z"},"venus":{"vb":"-10 0 478 1000","d":"M180 144q49 -16 108.5 4t104.5 65.5t58 100.5q18 82 -15.5 153t-106.5 107l-53 26q-10 5 -10 37t11 42q8 9 68 9h60v50l-62 2q-54 2 -68.5 12.5t-9.5 43.5q3 18 0 25t-16 13q-24 10 -36 -1.5t-14 -47.5l-2 -39l-142 -8v-50l142 -9v-37q0 -36 -13 -42q-74 -36 -99 -55 t-47 -57q-19 -34 -25 -102q-4 -45 -2 -63t15 -45q27 -54 61.5 -84t92.5 -50zM314 220q-17 -12 -33 -16t-44 -4q-96 1 -141.5 71.5t-16.5 170.5q7 22 17 34.5t33 28.5q69 46 147 33q36 -7 75.5 -50t45.5 -83q8 -53 -14.5 -103.5t-68.5 -81.5z"},"mars":{"vb":"-10 0 692 1000","d":"M635 175q11 -11 22.5 -5t13.5 24q2 19 -14.5 53t-16.5 44q0 17 -7.5 20t-19.5 -8q-11 -11 -18.5 -8t-31.5 27q-65 63 -50 93q24 45 31.5 78t6.5 90q-1 72 -15.5 107.5t-64.5 83.5q-66 65 -164 81q-52 8 -129.5 -27.5t-111.5 -83.5q-45 -64 -54 -143.5t21 -138.5 q84 -162 252 -162q36 0 86 12t56 22q5 8 26 8q19 0 57.5 -38t34.5 -53q-9 -24 -4.5 -32.5t40.5 -20.5q45 -15 54 -23zM470 455q-13 -20 -32.5 -39.5t-50 -37.5t-65.5 -21.5t-78 6.5q-42 13 -60 17q-40 11 -79.5 73.5t-39.5 114.5q0 39 28 99.5t57 82.5q70 56 155 47 q54 -5 89.5 -26t68.5 -67q23 -31 27 -47t4 -78q0 -58 -4 -76.5t-20 -47.5z"},"jupiter":{"vb":"-10 0 593 1000","d":"M109 162q34 -10 46 -10t50 10q63 16 94 54t42 112q7 43 6 67t-9 66q-11 54 -32 92.5t-63 81.5q-21 22 -26.5 31.5t0.5 13.5q11 7 82 5t78 -9q6 -6 6.5 -253t11.5 -262q8 -11 12 -11t16.5 11.5t15.5 46.5q3 37 4 220l2 251l52 4q72 6 75 31q1 7 -5 14q-11 13 -66 15l-56 3 l-2 43q-2 37 -14 52.5t-25 3.5t-18 -47q-3 -17 -4 -22.5t-7.5 -15t-15 -11t-28 -4.5t-45 -2t-67.5 2q-166 8 -159 -12q2 -6 67 -58q44 -35 79 -74t35 -53q0 -8 15 -30q13 -17 24 -65.5t11 -84.5q0 -55 -27.5 -100.5t-68.5 -59.5q-33 -11 -70 7.5t-65 58.5q-31 45 -40 46 q-7 0 -9.5 -14t1 -34.5t11.5 -35.5q16 -32 34.5 -48t51.5 -26z"},"saturn":{"vb":"-10 0 479 1000","d":"M72 143q1 -4 10.5 -8t20.5 2t13 28q2 24 13 30t64 12q38 4 45.5 8t7.5 18q0 15 -8.5 18.5t-53.5 6.5l-63 4l-2 36q-2 26 5.5 33.5t22.5 -5.5q8 -7 46 -16q39 -10 92 -1t80 30q29 23 49.5 67.5t15.5 73.5t-33.5 89.5t-40.5 71.5q-14 11 -14 23t-12 31q-16 23 -19 61t9 56 q13 21 41 22t51 -18q14 -11 21 -12.5t14 5.5q27 22 -8 47q-39 28 -93 23q-13 -2 -25 -5q-55 -19 -67 -74t25 -121q97 -172 97 -217q0 -29 -10.5 -47t-41.5 -40q-22 -16 -37.5 -20.5t-48.5 -4.5q-30 0 -45.5 3.5t-28.5 14.5q-28 22 -35.5 50.5t-11.5 127.5l-4 125h-42 l-8 -409l-25 -4q-14 -2 -20 -7.5t-7 -18.5q-2 -15 2 -19.5t22.5 -6t23.5 -6t7 -21.5q2 -25 6 -36z"},"uranus":{"vb":"-10 0 597 1000","d":"M525 206q14 -11 30 -13.5t21 5.5q4 7 -31 61q-39 60 -51.5 104t-9.5 109q2 58 17 101t52 97q17 25 16 36t-20 11q-22 0 -58.5 -60.5t-49.5 -118.5q-11 -50 -19 -60.5t-57 -10.5h-50v58q0 49 10 65t57 44q29 17 48 50t19 66q0 27 -24.5 69t-49.5 57q-27 16 -84 16 q-37 0 -51.5 -4t-31.5 -18q-41 -34 -54 -86t8 -95q15 -30 31 -45t46 -29l36 -16l-5 -128l-47 -3q-28 -1 -40.5 2t-18 10.5t-10 25.5t-10 40.5t-24.5 62.5t-49 84q-12 18 -32.5 22.5t-27.5 -7.5q-6 -9 17 -39q35 -45 61 -113t26 -113q0 -38 -32 -120t-52 -94q-12 -7 -7 -18 t20 -11q25 0 61.5 56.5t48.5 114.5l7 33h109l4 -54q3 -36 6.5 -45t14.5 -9t14.5 9t5.5 45l5 54h108l12 -37q16 -53 43.5 -101t41.5 -60zM365 678q-18 -18 -30 -23t-36 -5q-41 0 -67 22.5t-31 60.5q-7 70 41 100q49 30 97 6q30 -16 41.5 -35.5t11.5 -54.5q0 -27 -5 -39.5 t-22 -31.5z"},"neptune":{"vb":"-10 0 605 1000","d":"M44 185q34 -52 42 -52q4 0 8.5 7.5t14.5 27t21 36.5q17 27 16.5 36.5t-18.5 9.5q-15 0 -21 39.5t0 102.5q5 52 14.5 74.5t35.5 44.5q20 16 61.5 32t50.5 11q8 -5 8 -100q0 -85 -7 -95q-3 -5 -14 -9l-21 -8l21 -34q21 -33 21 -40.5t12.5 -17.5t25 0.5t33.5 48.5l21 39 l-17 11q-12 7 -14.5 24.5t-2.5 85.5q0 99 4 99q16 0 53.5 -21.5t61.5 -43.5l39 -38v-103q0 -73 -2.5 -89t-13.5 -19q-7 -2 -12 -7t-4 -10q0 -12 27 -50.5t34 -38.5q5 0 11.5 10t17.5 29t20 31q14 20 13 26.5t-17 8.5q-13 2 -16 14q-3 14 -3 98q0 82 -3.5 100.5t-22.5 45.5 q-24 35 -61.5 60t-78.5 34l-43 9v108l62 5q62 4 70 18q19 30 -31 33q-13 1 -31 0q-45 -2 -59.5 7.5t-14.5 42.5q0 20 -4 28t-15 12q-23 8 -31 -0.5t-10 -43.5l-3 -43l-63 3q-44 2 -55.5 -0.5t-18.5 -15.5q-12 -22 4 -31.5t69 -11.5l64 -3l3 -49q2 -42 -6 -51.5t-51 -15.5 q-38 -5 -83 -36t-62 -64q-11 -22 -14.5 -47t-3.5 -95l-2 -108l-43 -8z"},"pluto":{"vb":"-10 0 480 1000","d":"M31 182q26 -8 159.5 -3.5t161.5 14.5q63 22 85.5 56.5t21.5 109.5q0 44 -4 63.5t-14 36.5q-33 52 -93 73t-180 22h-100v242h384l5 54l-447 -4v-658zM345 248q-23 -12 -49.5 -16t-104.5 -6q-72 -2 -96 0t-27 9q-5 12 -2 136l2 125h250l37 -25q31 -21 40 -41t10 -70 q1 -43 -13 -68.5t-47 -43.5z"},"chiron":{"vb":"-10 0 380 1000","d":"M149 172q6 -7 20 -5t22 10q10 10 10 33t9 45l9 23l47 -48q48 -48 62 -42q20 7 15 24t-39 56l-47 52l103 91l-18 19q-18 20 -28 20q-7 0 -49.5 -40.5t-48.5 -37.5q-7 4 -7 79v75l37 16q15 7 34 21.5t29 28.5q17 21 22 36t5 50q3 128 -121 156q-27 6 -43.5 5t-46.5 -9 q-37 -11 -58.5 -29t-40.5 -55q-30 -59 -5.5 -115.5t95.5 -92.5l27 -14v-173q0 -174 6 -179zM248 604q-17 -12 -31.5 -16.5t-41.5 -4.5q-30 0 -43 5t-33 24q-22 19 -26.5 30.5t-4.5 43.5t5 43t30 33q22 19 35.5 24.5t38.5 5.5t38 -5t31 -21q43 -37 43.5 -83.5t-41.5 -78.5z"},"northNode":{"vb":"-10 0 673 1000","d":"M210 205q37 -20 56.5 -24.5t63.5 -5.5q39 0 60.5 4t43.5 14q94 45 132 118q15 29 18.5 49.5t3.5 72.5q-1 80 -14 106q-17 32 -14 51t28 35q50 31 61.5 73.5t-18.5 86.5q-13 19 -24 26t-34 10q-113 17 -127 -87q-4 -25 5 -50t55 -122q37 -74 41.5 -100.5t-8.5 -72.5 q-10 -32 -22 -51t-42 -48q-41 -41 -76 -54.5t-87 -7.5q-59 6 -111 48t-67 95q-9 33 -5 96q3 37 9 59t21 49q47 84 57 111.5t3 53.5q-19 69 -73.5 86.5t-107.5 -28.5q-20 -17 -24 -28.5t-4 -47.5q0 -42 12.5 -61.5t56.5 -46.5q21 -13 22 -29t-16 -56t-17 -95t17 -88t17 -42 q0 -15 35.5 -47t72.5 -52zM581 680q-36 -38 -70 -2q-29 31 -9 67q16 31 47 29q19 -1 34 -18q34 -37 -2 -76zM144 676q-22 -13 -40.5 -7t-31 19.5t-12 33.5t16.5 36q27 27 55 12t28 -56q0 -30 -16 -38z"},"ariesPoint":{"vb":"-10 0 737 1000","d":"M109 156q26 -4 59 1.5t48 17.5q48 38 81 109.5t47 167.5q11 79 20 81q7 0 14 -31q3 -14 7 -35q11 -57 28.5 -116t33.5 -89q31 -61 61.5 -82.5t84.5 -21.5q32 0 45.5 4.5t32.5 20.5q71 62 31 203q-8 27 -27.5 40.5t-32.5 0.5q-10 -10 0 -29q20 -39 20.5 -87t-18.5 -83 q-9 -17 -35 -23t-49 3q-20 9 -45.5 46t-39.5 79q-26 75 -52 209.5t-33 228.5q-4 44 -12.5 58t-26.5 4q-8 -4 -11.5 -27t-6.5 -95q-5 -111 -28.5 -222.5t-55.5 -176.5q-26 -50 -49.5 -73.5t-52.5 -27.5q-24 -3 -32.5 0.5t-23.5 23.5q-41 53 -10 145q19 55 -6 51q-7 -1 -18 -9 q-16 -10 -31.5 -50t-15.5 -70q0 -41 34 -91t65 -55z"},"cupido":{"vb":"-10 0 1690 2048","d":"M1630 1312h-399v201h200v125h-200v200h-125v-200h-200v-125h200v-201h-1003q209 -190 272 -265q147 -176 147 -336q0 -257 -367 -455l60 -110q432 233 432 565q0 234 -228 476h687v-354q-81 -22 -133.5 -89t-52.5 -151q0 -102 73 -176t175 -74t175 74t73 176 q0 84 -52 151.5t-133 88.5v354h399v125zM1291 593q0 -50 -36.5 -87.5t-86.5 -37.5t-86.5 37.5t-36.5 87.5t36.5 86.5t86.5 36.5t86.5 -36.5t36.5 -86.5z"},"hades":{"vb":"-10 0 1411 2048","d":"M1321 1484q-158 131 -360 165v289h-125v-279q-314 0 -535 -221t-221 -535t221 -535.5t535 -221.5q275 0 485 175l-80 97q-175 -146 -405 -146q-262 0 -446 184.5t-184 446.5t184 446t446 184v-446h-260v-125h260v-231h125v231h260v125h-260v434q157 -32 280 -134z"},"zeus":{"vb":"-10 0 1212 2048","d":"M1090 1779l-72 102l-417 -292l-417 292l-72 -102l380 -266l-380 -266l72 -102l354 248v-1048l-169 173l-90 -88l277 -284h90l277 284l-90 88l-169 -174v1049l354 -248l72 102l-380 266z"},"kronos":{"vb":"-10 0 1734 2048","d":"M1612 917l-125 3q-8 -280 -175 -466q-175 -197 -450 -197t-450 197q-167 186 -175 466l-125 -3q10 -331 212 -553q212 -232 538 -232t538 232q202 222 212 553zM1249 1021h-320v992h-125v-992h-320v-125h320v-351h125v351h320v125z"},"apollon":{"vb":"-10 0 1690 2048","d":"M1630 1312h-256v352q43 8 91 21l-33 120q-127 -35 -275 -35t-274 35l-33 -120q47 -13 91 -21v-352h-838q209 -190 272 -265q147 -176 147 -336q0 -257 -367 -455l60 -110q432 233 432 565q0 234 -228 476h522v-353q-48 -8 -92 -21l35 -120q110 32 273 32q165 0 274 -32 l35 120q-44 13 -92 21v353h256v125zM1249 1187v-340q-101 5 -183 1v339h183zM1249 1649v-337h-183v337q58 -4 91 -4q34 0 92 4z"},"admetos":{"vb":"-10 0 1236 2048","d":"M1146 888q0 205 -134.5 355.5t-335.5 173.5v661h-125v-660q-201 -23 -336 -173.5t-135 -356.5q0 -154 80 -283q78 -126 209 -193q-183 -114 -212 -379h61q73 321 395 321t395 -321h62q-29 265 -213 379q131 67 209 193q80 129 80 283zM1016 826q-20 -133 -113.5 -227.5 t-226.5 -114.5v342h340zM551 826v-342q-133 20 -227 114.5t-114 227.5h341zM1016 951h-340v340q132 -20 226 -114t114 -226zM551 1291v-340h-341q20 133 114 226.5t227 113.5z"},"vulkanus":{"vb":"-10 0 1256 2048","d":"M1176 1923h-1106l490 -616v-962l-169 173l-90 -88l277 -284h90l277 284l-90 88l-169 -174v963zM915 1797l-292 -367l-292 367h584z"},"poseidon":{"vb":"-10 0 2164 2048","d":"M2010 1686l-114 52q-94 -205 -314 -323q-195 -104 -442 -117v340h-126v-340q-247 13 -442 117q-220 118 -314 323l-114 -52q110 -240 360 -377q226 -123 510 -137v-239q-284 -14 -510 -137q-250 -137 -360 -377l114 -52q94 205 314 323q195 104 442 117v-333h126v333 q247 -13 442 -117q220 -118 314 -323l114 52q-110 240 -360 377q-226 123 -510 137v239q284 14 510 137q250 137 360 377z"}}
+</script>
+<script>
+(function () {
+  const A = window.AstroEphem;
+  const svg = document.getElementById("dial");
+  const GLYPHS = JSON.parse(document.getElementById("glyph-data").textContent);
+  const NS = "http://www.w3.org/2000/svg";
+  const CX = 220, CY = 220;
+  const R_TICK = 196, R_RING = 150, R_GLYPH = 172, R_DOT = 150, GAP = 12, GS = 23;
+
+  // Bodies on the dial: luminaries + planets + node + the eight Uranian TNPs. Angles (A / M) are
+  // added when a place is known. The Aries Point is the fixed marker at top (0° = the cardinal axis).
+  const BODIES = ["sun","moon","mercury","venus","mars","jupiter","saturn","uranus","neptune","pluto",
+                  "northNode","ariesPoint","cupido","hades","zeus","kronos","apollon","admetos","vulkanus","poseidon"];
+  const ANGLES = { ascendant: "A", midheaven: "M", vertex: "V" };
+
+  // Per-body hues [h, s, l] (traditional astrology colours, after harmonic-explorer's palette). The
+  // eight Uranian TNPs share a violet. Lightness is lifted in dark mode so every hue reads on both.
+  const HUE = {
+    sun: [45, 90, 48], moon: [222, 62, 55], mercury: [96, 45, 42], venus: [172, 60, 40],
+    mars: [0, 72, 52], jupiter: [258, 55, 60], saturn: [220, 12, 52], uranus: [244, 52, 62],
+    neptune: [28, 78, 45], pluto: [186, 88, 34], chiron: [30, 52, 46], northNode: [220, 10, 52],
+    ariesPoint: [42, 68, 50],
+    ascendant: [222, 12, 50], midheaven: [222, 12, 50], vertex: [222, 12, 50],   // A / M / V share one gray
+  };
+  const TNP = new Set(["cupido","hades","zeus","kronos","apollon","admetos","vulkanus","poseidon"]);
+  const isDark = () => {
+    const t = document.documentElement.dataset.theme;
+    return t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches);
+  };
+  const colorFor = key => {
+    const [h, s, l] = HUE[key] || (TNP.has(key) ? [284, 42, 60] : [0, 0, 40]);
+    return `hsl(${h}, ${s}%, ${Math.min(l + (isDark() ? 12 : 0), 72)}%)`;
+  };
+
+  const pt = (r, deg) => { const a = deg * Math.PI / 180; return [CX + r * Math.sin(a), CY - r * Math.cos(a)]; };
+  const el = (tag, attrs, text) => {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    return n;
+  };
+  // An inline SVG glyph centered at (x, y), sized to `size`, filled with `color`. A nested <svg> with
+  // the glyph's own viewBox keeps each glyph's aspect ratio (preserveAspectRatio defaults to meet).
+  const glyphAt = (key, x, y, color, title, size = GS) => {
+    const g = GLYPHS[key];
+    const wrap = el("svg", { x: x - size / 2, y: y - size / 2, width: size, height: size, viewBox: g.vb, class: "g", "data-key": key, style: `color:${color}`, overflow: "visible" });
+    if (title) wrap.appendChild(el("title", {}, title));
+    wrap.appendChild(el("path", { fill: "currentColor", d: g.d }));
+    return wrap;
+  };
+  const mod90 = x => ((x % 90) + 90) % 90;
+
+  // Display names + a radix (true zodiac) readout for hover tooltips.
+  const NAME = {
+    sun: "Sun", moon: "Moon", mercury: "Mercury", venus: "Venus", mars: "Mars", jupiter: "Jupiter",
+    saturn: "Saturn", uranus: "Uranus", neptune: "Neptune", pluto: "Pluto", chiron: "Chiron",
+    northNode: "North Node", ariesPoint: "Aries Point", ascendant: "Ascendant", midheaven: "Midheaven", vertex: "Vertex",
+    cupido: "Cupido", hades: "Hades", zeus: "Zeus", kronos: "Kronos", apollon: "Apollon",
+    admetos: "Admetos", vulkanus: "Vulkanus", poseidon: "Poseidon",
+  };
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  const tip = p => {
+    const d = Math.floor(p.degreesInSign), m = Math.round((p.degreesInSign - d) * 60);
+    const mm = m === 60 ? [d + 1, 0] : [d, m];
+    return `${NAME[p.key] || p.key} — ${mm[0]}°${String(mm[1]).padStart(2, "0")}′ ${cap(p.sign)}`;
+  };
+
+  // Two-letter tags + a canonical order for the midpoints list.
+  const ABBR = {
+    sun: "SU", moon: "MO", mercury: "ME", venus: "VE", mars: "MA", jupiter: "JU", saturn: "SA",
+    uranus: "UR", neptune: "NE", pluto: "PL", chiron: "CH", northNode: "NN", ariesPoint: "AR",
+    ascendant: "AC", midheaven: "MC", vertex: "VX",
+    cupido: "CU", hades: "HA", zeus: "ZE", kronos: "KR", apollon: "AP", admetos: "AD", vulkanus: "VU", poseidon: "PO",
+  };
+  const ORDER = ["sun", "moon", "mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune", "pluto",
+    "chiron", "northNode", "cupido", "hades", "zeus", "kronos", "apollon", "admetos", "vulkanus", "poseidon",
+    "ascendant", "midheaven", "vertex", "ariesPoint"];
+  const oi = k => { const i = ORDER.indexOf(k); return i < 0 ? 99 : i; };
+  const orderPair = (a, b) => (oi(a) <= oi(b) ? `${ABBR[a]}/${ABBR[b]}` : `${ABBR[b]}/${ABBR[a]}`);
+  const fmtOrb = o => { let d = Math.floor(o), m = Math.round((o - d) * 60); if (m === 60) { d++; m = 0; } return `${d}°${String(m).padStart(2, "0")}′`; };
+
+  const norm = a => ((a % 360) + 360) % 360;
+  const angDist = (a, b) => { const d = Math.abs(norm(a) - norm(b)); return Math.min(d, 360 - d); };
+  const angleFromCenter = (sx, sy) => norm(Math.atan2(sx - CX, -(sy - CY)) * 180 / Math.PI);
+  // Angular footprint (deg) of a glyph at the glyph ring, from its rendered width + a little padding.
+  const glyphWidth = key => {
+    const g = GLYPHS[key];
+    const w = g ? GS * Math.min(1, (p => p[2] / p[3])(g.vb.split(/\s+/).map(Number))) : GS * 0.62;
+    return w / R_GLYPH * (180 / Math.PI) + 1.6;
+  };
+
+  let place = null, lastItems = [], overlayG = null, pointerAngle = 0, pointerUserSet = false, mcLon = 0, quadrant = true;
+  let apexInfo = { kind: "free", lon: 0 };   // the axis under the pointer: body | midpoint | free
+  // Screen angle of an ecliptic longitude on the MC-topped dial: fold to 90°, measure from the MC.
+  const screenOf = lon => mod90(lon - mcLon) / 90 * 360;
+
+  function drawFrame() {
+    const f = document.createDocumentFragment();
+    f.appendChild(el("circle", { class: "ring", cx: CX, cy: CY, r: R_TICK }));
+    f.appendChild(el("circle", { class: "ring inner", cx: CX, cy: CY, r: R_RING }));
+
+    for (let d = 0; d < 90; d++) {
+      const deg = d / 90 * 360;
+      const cls = d % 30 === 0 ? "tick maj" : d % 5 === 0 ? "tick med" : "tick";
+      const len = d % 30 === 0 ? 15 : d % 5 === 0 ? 9 : 5;
+      const [x1, y1] = pt(R_TICK, deg), [x2, y2] = pt(R_TICK - len, deg);
+      f.appendChild(el("line", { class: cls, x1, y1, x2, y2 }));
+    }
+    // Midheaven marker outside the wheel at the top — the dial is oriented to the MC. Clickable
+    // (data-key) so tapping it snaps the pointer back to the M axis.
+    const [ix, iy] = pt(R_TICK, 0), [ox, oy] = pt(R_TICK + 10, 0);
+    f.appendChild(el("line", { class: "mc-mark", "data-key": "midheaven", x1: ix, y1: iy, x2: ox, y2: oy }));
+    f.appendChild(el("text", { class: "mc-cap", "data-key": "midheaven", x: CX, y: oy - 9 }, "M"));
+    f.appendChild(el("circle", { class: "hit", "data-key": "midheaven", cx: CX, cy: oy - 5, r: 13, fill: "transparent", "pointer-events": "all" }));
+    return f;
+  }
+
+  function render() {
+    if (!place) return;
+    const now = new Date();
+    A.chart({ when: now, place, bodies: BODIES, aspects: false }).then(chart => {
+      mcLon = chart.angles ? chart.angles.midheaven.longitude : 0;   // the MC sits at the top of the dial
+      const items = [];
+      for (const k of BODIES) {
+        const b = chart.bodies[k];
+        if (b) items.push({ key: k, p: { ...b, key: k }, angle: screenOf(b.longitude) });
+      }
+      if (chart.angles) for (const k in ANGLES) {
+        const g = chart.angles[k];
+        items.push({ key: k, p: { ...g, key: k }, angle: screenOf(g.longitude) });
+      }
+      // Width-aware declutter: each glyph claims room proportional to its actual rendered width. The
+      // Midheaven isn't drawn in the wheel (it's the fixed top marker), so it doesn't claim a slot.
+      const spaced = A.spaceAngles(items.filter(it => it.key !== "midheaven")
+        .map(it => ({ key: it.key, angle: it.angle, width: glyphWidth(it.key) })), GAP);
+      lastItems = items.map(it => ({ key: it.key, angle: it.angle, lon: it.p.longitude }));
+
+      svg.replaceChildren(drawFrame());
+      overlayG = el("g", { class: "overlay" });   // midpoint chords + pointer (behind the glyphs)
+      svg.appendChild(overlayG);
+
+      // Per body: a colour tick on the scale (true degree), a neck to the glyph, a dot, then the glyph.
+      const bodiesG = el("g");
+      for (const it of items) {
+        if (it.key === "midheaven") continue;   // drawn as the fixed top marker, not in the wheel
+        const color = colorFor(it.key);
+        const [tx1, ty1] = pt(R_TICK, it.angle), [tx2, ty2] = pt(R_TICK - 9, it.angle);
+        const [dx, dy] = pt(R_DOT, it.angle);
+        const [gx, gy] = pt(R_GLYPH, spaced[it.key]);
+        const [nx, ny] = pt(R_GLYPH - 9, spaced[it.key]);
+        bodiesG.appendChild(el("line", { class: "pointer", x1: tx1, y1: ty1, x2: tx2, y2: ty2, stroke: color }));
+        bodiesG.appendChild(el("line", { class: "skewer", x1: dx, y1: dy, x2: nx, y2: ny, stroke: color }));
+        // The degree dot is clickable, and an invisible disc makes the (hollow) glyph easy to hit.
+        bodiesG.appendChild(el("circle", { class: "dot hit", "data-key": it.key, cx: dx, cy: dy, r: 3, fill: color }));
+        bodiesG.appendChild(el("circle", { class: "hit", "data-key": it.key, cx: gx, cy: gy, r: 13, fill: "transparent", "pointer-events": "all" }));
+        const title = tip(it.p);
+        if (ANGLES[it.key]) {
+          const t = el("text", { class: "glyph", "data-key": it.key, x: gx, y: gy, style: `fill:${color}` });
+          t.appendChild(el("title", {}, title));
+          t.appendChild(document.createTextNode(ANGLES[it.key]));
+          bodiesG.appendChild(t);
+        } else {
+          bodiesG.appendChild(glyphAt(it.key, gx, gy, color, title));
+        }
+      }
+      svg.appendChild(bodiesG);
+
+      // Hub: a soft disc so the clock reads clean over the pointer, then the readout.
+      const hubG = el("g");
+      hubG.appendChild(el("circle", { class: "hub-bg", cx: CX, cy: CY, r: 46 }));
+      const hh = String(now.getHours()).padStart(2, "0"), mm = String(now.getMinutes()).padStart(2, "0");
+      const dateStr = now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+      hubG.appendChild(el("text", { class: "hub-tag", x: CX, y: CY - 34 }, "90° dial"));
+      const timeT = el("text", { class: "hub-time", x: CX, y: CY });
+      timeT.appendChild(el("tspan", {}, hh));
+      timeT.appendChild(el("tspan", { id: "colon" }, ":"));
+      timeT.appendChild(el("tspan", {}, mm));
+      hubG.appendChild(timeT);
+      hubG.appendChild(el("text", { class: "hub-sub", x: CX, y: CY + 26 }, dateStr));
+      svg.appendChild(hubG);
+
+      // The pointer defaults to the Midheaven's dial degree until the user drags it.
+      if (!pointerUserSet) { const mc = items.find(it => it.key === "midheaven"); if (mc) pointerAngle = mc.angle; }
+      drawOverlay();
+    }).catch(err => console.error(err));
+  }
+
+  // Draw the movable pointer and the midpoint chords it selects. A midpoint picture "pointer = a/b"
+  // means the pair's midpoint sits on the pointer axis on the dial, i.e. the two bodies are symmetric
+  // about the pointer — so we connect them with a chord. Cheap enough to redraw live while dragging.
+  function drawOverlay() {
+    if (!overlayG) return;
+    overlayG.replaceChildren();
+    const ORB_PAIR = 2.0, ORB_SINGLE = 3.0;   // wider orb for direct single-body aspects
+    const QUAD = ["☌", "⊞", "☍", "⊟"];        // conj / +square (waxing) / opp / −square (waning)
+    // The apex body under the pointer gives real longitudes, so we can name each picture's quadrant
+    // (conj/opp/±square) from the phase apex→midpoint. A free-dragged axis falls back to the folded dial.
+    // The axis under the pointer: a body, else a midpoint whose degree the pointer hits, else a free
+    // degree. Sets both the apex longitude (for typing) and the tree header (`apexInfo`).
+    // The closest point to the pointer (not merely the first) — so a planet conjunct the MC doesn't
+    // shadow the MC when the pointer sits exactly on it.
+    let bodyApex = null, bd = Infinity;
+    for (const it of lastItems) { const d = angDist(it.angle, pointerAngle); if (d < bd) { bd = d; bodyApex = it; } }
+    if (bd >= 1.4) bodyApex = null;
+    let apexLon;
+    if (bodyApex) {
+      apexLon = bodyApex.lon; apexInfo = { kind: "body", key: bodyApex.key };
+    } else {
+      let best = null;
+      for (let i = 0; i < lastItems.length; i++) for (let j = i + 1; j < lastItems.length; j++) {
+        const mid = A.midpoint(lastItems[i].lon, lastItems[j].lon);
+        const dev = angDist(screenOf(mid), pointerAngle);
+        if (!best || dev < best.dev) best = { a: lastItems[i].key, b: lastItems[j].key, lon: mid, dev };
+      }
+      if (best && best.dev < 1.4) { apexLon = best.lon; apexInfo = { kind: "midpoint", a: best.a, b: best.b, lon: best.lon }; }
+      else { apexLon = norm(mcLon + pointerAngle / 4); apexInfo = { kind: "free", lon: apexLon }; }
+    }
+    // Is `targetLon` (a body or a midpoint) within `lim`° of the pointer? Returns orb + quadrant type.
+    const classify = (targetLon, lim) => {
+      const phase = norm(apexLon - targetLon);
+      const qi = ((Math.round(phase / 90) % 4) + 4) % 4;   // 0/1/2/3 → ☌ ⊞ ☍ ⊟
+      const dev = angDist(phase, qi * 90);
+      if (dev > lim || (!quadrant && qi !== 0)) return null;  // quadrant off ⇒ conjunctions only
+      return { orb: dev, type: QUAD[qi] };
+    };
+    const skipSingle = it => apexInfo.kind === "body" && it.key === apexInfo.key;
+    const skipPair = (x, y) => apexInfo.kind === "body" ? (x === apexInfo.key || y === apexInfo.key)
+      : apexInfo.kind === "midpoint" ? ((x === apexInfo.a && y === apexInfo.b) || (x === apexInfo.b && y === apexInfo.a)) : false;
+    const active = [];
+    // Single bodies conjunct / opposite / square the apex (not the apex itself) — a wider orb.
+    for (const it of lastItems) {
+      if (skipSingle(it)) continue;
+      const r = classify(it.lon, ORB_SINGLE);
+      if (r) active.push({ single: it.key, orb: r.orb, type: r.type });
+    }
+    // Midpoint pictures apex = a/b, chorded on the dial (the apex pair itself is skipped).
+    for (let i = 0; i < lastItems.length; i++) {
+      for (let j = i + 1; j < lastItems.length; j++) {
+        const a = lastItems[i], b = lastItems[j];
+        if (skipPair(a.key, b.key)) continue;
+        const r = classify(A.midpoint(a.lon, b.lon), ORB_PAIR);
+        if (!r) continue;
+        const alpha = (0.75 - 0.6 * (r.orb / ORB_PAIR)).toFixed(3);
+        const [ax, ay] = pt(R_DOT, a.angle), [bx, by] = pt(R_DOT, b.angle);
+        overlayG.appendChild(el("line", { class: "chord", x1: ax, y1: ay, x2: bx, y2: by, "stroke-opacity": alpha }));
+        active.push({ a: a.key, b: b.key, orb: r.orb, type: r.type });
+      }
+    }
+    const arms = quadrant ? [0, 90, 180, 270] : [0];   // the pointer is a cross in quadrant mode
+    // Pointer arms (one, or a cross in quadrant mode) from the hub edge all the way to the tick ring.
+    for (const off of arms) {
+      const ang = norm(pointerAngle + off);
+      const [rx, ry] = pt(48, ang), [ex, ey] = pt(R_TICK, ang);
+      overlayG.appendChild(el("line", { class: "pointer-axis", x1: rx, y1: ry, x2: ex, y2: ey }));
+    }
+    // The draggable inward triangle (and its invisible grab target) caps the primary arm.
+    const [tipx, tipy] = pt(R_TICK - 3, pointerAngle);
+    const b1 = pt(R_TICK + 13, pointerAngle - 2.4), b2 = pt(R_TICK + 13, pointerAngle + 2.4);
+    overlayG.appendChild(el("path", { class: "pointer-knob", "data-drag": "1", d: `M ${tipx} ${tipy} L ${b1[0]} ${b1[1]} L ${b2[0]} ${b2[1]} Z` }));
+    const [gx, gy] = pt(R_TICK + 4, pointerAngle);
+    overlayG.appendChild(el("circle", { class: "pointer-grab", "data-drag": "1", cx: gx, cy: gy, r: 16, fill: "transparent", "pointer-events": "all" }));
+
+    renderApex();
+    renderMidpointList(active);
+  }
+
+  // The axis body (the pointer's target) at the head of the tree — its glyph + radix sign/degree.
+  function renderApex() {
+    const box = document.getElementById("mp-apex");
+    if (!box) return;
+    box.replaceChildren();
+    const glyphEl = key => {
+      const color = colorFor(key);
+      if (GLYPHS[key]) {
+        const g = GLYPHS[key];
+        const s = el("svg", { viewBox: g.vb, style: `color:${color}` });
+        s.appendChild(el("path", { fill: "currentColor", d: g.d }));
+        return s;
+      }
+      const t = document.createElement("span");
+      t.style.color = color; t.style.fontWeight = 700; t.textContent = ABBR[key] || key;
+      return t;
+    };
+    const degEl = lon => {
+      const s = A.signOf(lon), d = Math.floor(s.degreesInSign), m = Math.round((s.degreesInSign - d) * 60);
+      const mm = m === 60 ? [d + 1, 0] : [d, m];
+      const e = document.createElement("span");
+      e.className = "mp-apex-deg";
+      e.textContent = `${mm[0]}${s.symbol}${String(mm[1]).padStart(2, "0")}`;
+      return e;
+    };
+    if (apexInfo.kind === "body") {
+      const it = lastItems.find(x => x.key === apexInfo.key);
+      box.className = "mp-apex";
+      box.append(glyphEl(apexInfo.key), degEl(it ? it.lon : apexInfo.lon));
+    } else if (apexInfo.kind === "midpoint") {
+      const sep = document.createElement("span");
+      sep.className = "mp-apex-sep"; sep.textContent = "/";
+      box.className = "mp-apex";
+      box.append(glyphEl(apexInfo.a), sep, glyphEl(apexInfo.b), degEl(apexInfo.lon));
+    } else {
+      box.className = "mp-apex free";
+      box.append(document.createTextNode("axis "), degEl(apexInfo.lon));
+    }
+  }
+
+  // The active midpoint pictures under the pointer, tightest orb first, in the side column.
+  function renderMidpointList(active) {
+    const list = document.getElementById("mp-list");
+    if (!list) return;
+    list.replaceChildren();
+    if (!active.length) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.className = "mp-empty"; td.colSpan = 3; td.textContent = "— none on the pointer —";
+      tr.appendChild(td); list.appendChild(tr);
+      return;
+    }
+    active.sort((x, y) => x.orb - y.orb);
+    for (const m of active) {
+      const tr = document.createElement("tr");
+      const type = document.createElement("td");
+      type.className = "mp-type" + (m.type === "⊞" || m.type === "⊟" ? " sq" : "");
+      type.textContent = m.type;
+      const pair = document.createElement("td");
+      pair.className = "mp-pair"; pair.textContent = m.single ? (ABBR[m.single] || m.single) : orderPair(m.a, m.b);
+      const orb = document.createElement("td");
+      orb.className = "mp-orb"; orb.textContent = fmtOrb(m.orb);
+      tr.append(type, pair, orb);
+      list.appendChild(tr);
+    }
+  }
+
+  // Drag anywhere on the dial to swing the pointer; double-click snaps it back to the Midheaven.
+  function pointerFromEvent(e) {
+    const rect = svg.getBoundingClientRect();
+    const src = e.touches && e.touches[0] ? e.touches[0] : e;
+    return angleFromCenter((src.clientX - rect.left) / rect.width * 440, (src.clientY - rect.top) / rect.height * 440);
+  }
+  let dragging = false;
+  const onDown = e => {
+    if (!e.target.closest) return;
+    // Clicking a glyph snaps the pointer to that body's true dial degree.
+    const g = e.target.closest("[data-key]");
+    const it = g && lastItems.find(x => x.key === g.getAttribute("data-key"));
+    if (it) { pointerUserSet = true; pointerAngle = it.angle; drawOverlay(); e.preventDefault(); return; }
+    // Otherwise only the pointer itself is draggable — the rest of the dial is inert.
+    if (!e.target.closest("[data-drag]")) return;
+    dragging = true; svg.classList.add("dragging"); pointerUserSet = true; pointerAngle = pointerFromEvent(e); drawOverlay(); e.preventDefault();
+  };
+  const onMove = e => { if (!dragging) return; pointerAngle = pointerFromEvent(e); drawOverlay(); e.preventDefault(); };
+  const onUp = () => { dragging = false; svg.classList.remove("dragging"); };
+  svg.addEventListener("mousedown", onDown);
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+  svg.addEventListener("touchstart", onDown, { passive: false });
+  window.addEventListener("touchmove", onMove, { passive: false });
+  window.addEventListener("touchend", onUp);
+  svg.addEventListener("dblclick", () => {
+    pointerUserSet = false;
+    const mc = lastItems.find(it => it.key === "midheaven");
+    if (mc) pointerAngle = mc.angle;
+    drawOverlay();
+  });
+
+  let placeLabel = "";
+  function setPlace(lat, lon, label) {
+    place = { lat, lon };
+    placeLabel = label || `${lat.toFixed(3)}°, ${lon.toFixed(3)}°`;
+    document.getElementById("loc").textContent = placeLabel;
+    render();
+  }
+
+  // Remember the last resolved location (sandboxed iframes can block storage, so guard every access).
+  const LS_KEY = "falcon-dial-place";
+  const loadCached = () => {
+    try {
+      const o = JSON.parse(localStorage.getItem(LS_KEY));
+      if (o && Number.isFinite(o.lat) && Number.isFinite(o.lon)) return o;
+    } catch (e) {}
+    return null;
+  };
+  const saveCached = (lat, lon) => { try { localStorage.setItem(LS_KEY, JSON.stringify({ lat, lon })); } catch (e) {} };
+
+  // Update aligned to the minute, like a wall clock.
+  function scheduleMinute() {
+    const now = new Date();
+    const ms = 60000 - (now.getSeconds() * 1000 + now.getMilliseconds());
+    setTimeout(function tick() { render(); setTimeout(tick, 60000); }, ms);
+  }
+
+  function locate() {
+    const loc = document.getElementById("loc");
+    if (!navigator.geolocation) { if (!place) setPlace(0, 0, "Null Island (0°, 0°)"); return; }
+    loc.textContent = "locating…";
+    navigator.geolocation.getCurrentPosition(
+      p => { setPlace(p.coords.latitude, p.coords.longitude); saveCached(p.coords.latitude, p.coords.longitude); },
+      err => {
+        const why = err.code === 1 ? "permission denied" : err.code === 2 ? "position unavailable" : "timed out";
+        if (!place) setPlace(0, 0, "Null Island (0°, 0°)");
+        loc.textContent = `${placeLabel} · location ${why}`;
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+    );
+  }
+
+  document.getElementById("locateBtn").addEventListener("click", locate);
+  document.getElementById("quadrant").addEventListener("change", e => { quadrant = e.target.checked; drawOverlay(); });
+  // Blink the clock colon once a second — toggle fill-opacity, which animates reliably on SVG tspans
+  // (including Safari, where a CSS opacity animation on a <tspan> does not).
+  setInterval(() => {
+    const c = document.getElementById("colon");
+    if (c) c.setAttribute("fill-opacity", c.getAttribute("fill-opacity") === "0.5" ? "1" : "0.5");
+  }, 1000);
+  // Prefer a remembered location on load; otherwise try geolocation (falling back to Null Island).
+  const cached = loadCached();
+  if (cached) setPlace(cached.lat, cached.lon);
+  else locate();
+  scheduleMinute();
+})();
+</script>
+<!-- END ARTIFACT BODY -->
+</body>
+</html>

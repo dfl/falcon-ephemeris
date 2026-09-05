@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { houseCusps, HOUSE_SYSTEMS } from '../src/house-systems.js';
+import { houseCusps, vertex, HOUSE_SYSTEMS } from '../src/house-systems.js';
 import { SWETEST_HOUSES } from './house-reference-swetest.js';
 
 // Black-box validation against Swiss Ephemeris (swetest) output: feed swetest's own anchors
@@ -25,6 +25,14 @@ describe('house systems vs Swiss Ephemeris (swetest)', () => {
       }
     });
   }
+
+  describe('vertex vs swetest', () => {
+    for (const [name, fx] of Object.entries(SWETEST_HOUSES)) {
+      it(`${name}: within 1"`, () => {
+        expect(angSep(vertex(fx.armc, fx.lat, fx.eps), fx.vertex) * 3600).toBeLessThan(1);
+      });
+    }
+  });
 
   it('covers every houseCusps system except the two swetest lacks', () => {
     const covered = new Set(Object.values(SWETEST_HOUSES).flatMap(fx => Object.keys(fx.systems)));

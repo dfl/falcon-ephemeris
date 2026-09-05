@@ -22,11 +22,13 @@ describe('chart — deterministic UTC natal', () => {
     expect(c.bodies.moon.house).toBeLessThanOrEqual(12);
   });
 
-  it('gives the four angles, with descendant/IC opposite asc/mc', async () => {
+  it('gives the angles, with descendant/IC/antivertex opposite asc/mc/vertex', async () => {
     const { angles } = await chart({ when: UTC_1990, place: NY });
     const opp = (a, b) => Math.abs((((a - b) % 360) + 540) % 360 - 180);
     expect(opp(angles.ascendant.longitude, angles.descendant.longitude)).toBeCloseTo(180, 6);
     expect(opp(angles.midheaven.longitude, angles.imumCoeli.longitude)).toBeCloseTo(180, 6);
+    expect(angles.vertex).toBeTruthy();
+    expect(opp(angles.vertex.longitude, angles.antivertex.longitude)).toBeCloseTo(180, 6);
   });
 
   it('returns 12 house cusps with cusp 1 = ascendant', async () => {

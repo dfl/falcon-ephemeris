@@ -5,8 +5,8 @@
 export {
   chart, HOUSE_SYSTEMS, AYANAMSHAS,
   signOf, SIGNS, findAspects, ASPECTS, ayanamsha, resolveUTC,
-  midpoint, midpoints, midpointPictures,
+  midpoint, midpoints, midpointPictures, spaceAngles,
 } from '../src/chart/index.js';
 export { default as Ephemeris, obliquity, apparentSiderealTime } from '../src/ephemeris-mit.js';
-export { houseCusps, ascendant, midheaven } from '../src/house-systems.js';
+export { houseCusps, ascendant, midheaven, vertex } from '../src/house-systems.js';
 export { deltaTSeconds } from '../src/delta-t.js';
