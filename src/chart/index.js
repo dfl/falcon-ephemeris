@@ -14,8 +14,9 @@ const norm360 = x => ((x % 360) + 360) % 360;
 const norm180 = x => { const v = norm360(x); return v > 180 ? v - 360 : v; };
 const HALF_DAY_MS = 43_200_000;
 
-// Points computed from the Moon's orbit rather than as bodies in their own right.
-const DERIVED = ['northNode', 'southNode', 'lilith', 'priapus'];
+// Points computed from the Moon's orbit rather than as bodies in their own right. The `true*`
+// variants are the osculating node and the interpolated apogee/perigee (see ephemeris-mit.js).
+const DERIVED = ['northNode', 'southNode', 'lilith', 'priapus', 'trueNode', 'trueSouthNode', 'trueLilith', 'truePriapus'];
 // A sensible default body set; pass `bodies: 'all'` for every point falcon computes.
 export const DEFAULT_BODIES = [
   'sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto',
@@ -34,6 +35,10 @@ function pointLongitudes(eph) {
     m.southNode = moon.orbit.meanDescendingNode.apparentLongitude;
     m.lilith = moon.orbit.meanApogee.apparentLongitude;
     m.priapus = moon.orbit.meanPerigee.apparentLongitude;
+    m.trueNode = moon.orbit.trueAscendingNode.apparentLongitude;
+    m.trueSouthNode = moon.orbit.trueDescendingNode.apparentLongitude;
+    m.trueLilith = moon.orbit.trueApogee.apparentLongitude;
+    m.truePriapus = moon.orbit.truePerigee.apparentLongitude;
   }
   return m;
 }

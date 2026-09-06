@@ -60,6 +60,16 @@ describe('chart — deterministic UTC natal', () => {
     expect(c.bodies.cupido).toBeTruthy();
   });
 
+  it('exposes the true node and interpolated Lilith/Priapus as selectable points', async () => {
+    const c = await chart({ when: UTC_1990, place: NY, bodies: ['trueNode', 'trueSouthNode', 'trueLilith', 'truePriapus', 'northNode', 'lilith'] });
+    const sep = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
+    for (const k of ['trueNode', 'trueSouthNode', 'trueLilith', 'truePriapus']) expect(c.bodies[k], k).toBeTruthy();
+    // The osculating node stays within ~1.6° of the mean node; interpolated Lilith near mean Lilith.
+    expect(sep(c.bodies.trueNode.longitude, c.bodies.northNode.longitude)).toBeLessThan(2);
+    expect(sep(c.bodies.trueLilith.longitude, c.bodies.lilith.longitude)).toBeLessThan(8);
+    expect(sep(c.bodies.trueNode.longitude, c.bodies.trueSouthNode.longitude)).toBeGreaterThan(179.9);
+  });
+
   it('rejects an unknown house system', async () => {
     await expect(chart({ when: UTC_1990, place: NY, houseSystem: 'nope' })).rejects.toThrow(/unknown houseSystem/);
   });
