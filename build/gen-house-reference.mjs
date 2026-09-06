@@ -15,8 +15,8 @@ const CASES = [
   { name: 'london_1985',  date: '13.7.1985', ut: '09:30', lat: 51.5,   lon: -0.13 },
 ];
 const SYSTEMS = { placidus:'P', koch:'K', campanus:'C', regiomontanus:'R', porphyry:'O',
-  meridian:'X', morinus:'M', vehlow:'V', equal:'A', 'whole-sign':'W', alcabitius:'B',
-  topocentric:'T', sunshine:'i' };
+  meridian:'X', morinus:'M', vehlow:'V', equal:'A', 'equal-mc':'D', 'equal-aries':'N',
+  'whole-sign':'W', krusinski:'U', alcabitius:'B', topocentric:'T', sunshine:'i' };
 
 const dms = s => { const m = s.match(/(-?\d+)°\s*(\d+)'\s*([\d.]+)/); if (!m) return null;
   const sign = m[1].startsWith('-') ? -1 : 1; return sign * (Math.abs(+m[1]) + (+m[2])/60 + (+m[3])/3600); };

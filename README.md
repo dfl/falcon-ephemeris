@@ -100,11 +100,13 @@ c.meta;              // { utc, zone, julianDay, deltaT, obliquity, siderealTime,
 `ayanamsha`, `AYANAMSHAS`, and `HOUSE_SYSTEMS` alongside it.
 
 `HOUSE_SYSTEMS` covers Placidus, Koch, Campanus, Regiomontanus, Porphyry, Sripati,
-Meridian, Morinus, Vehlow, Equal, Whole-sign, Alcabitius, Topocentric,
-Topocentric-progressive, and Sunshine — validated cusp-for-cusp against Swiss
-Ephemeris (`swetest`) to sub-arcsecond. For a `sidereal` chart, longitudes, angles,
-and cusps are shifted by the Lahiri or Fagan–Bradley ayanamsha; house membership and
-aspect angles are unaffected.
+Meridian, Morinus, Vehlow, Equal, Equal-MC, Equal/1=Aries, Whole-sign, Krušinski,
+Alcabitius, Topocentric, Topocentric-progressive, and Sunshine — validated
+cusp-for-cusp against Swiss Ephemeris (`swetest`) to sub-arcsecond. The separate
+`gauquelinSectors(armc, lat, eps)` export returns the 36 Gauquelin sectors (sector 1 =
+Ascendant, 10 = MC, 19 = Descendant, 28 = IC). For a `sidereal` chart, longitudes,
+angles, and cusps are shifted by the Lahiri or Fagan–Bradley ayanamsha; house
+membership and aspect angles are unaffected.
 
 ### Exports
 
@@ -114,6 +116,7 @@ aspect angles are unaffected.
 | `obliquity(date)` | `src/ephemeris-mit.js` | True obliquity of date (deg) |
 | `apparentSiderealTime(date, lon)` | `src/ephemeris-mit.js` | Local apparent sidereal time (deg) |
 | `houseCusps(system, anchors)` | `src/house-systems.js` | Cusp longitudes for one system |
+| `gauquelinSectors(armc, lat, eps)` | `src/house-systems.js` | 36 Gauquelin sector longitudes |
 | `ascendant(armc, lat, eps)` | `src/house-systems.js` | Ascendant ecliptic longitude (closed form) |
 | `midheaven(armc, eps)` | `src/house-systems.js` | Midheaven ecliptic longitude (closed form) |
 | `HOUSE_SYSTEMS` | `src/house-systems.js` | Every system `houseCusps` computes |

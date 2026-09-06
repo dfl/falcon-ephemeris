@@ -78,6 +78,18 @@ function wholeSignCusps(asc) {
   return Array.from({ length: 12 }, (_, i) => norm(start + 30 * i));
 }
 
+// Equal houses anchored on the Midheaven (cusp 10 = MC), then equal 30-degree steps. So cusp 1 sits
+// a quadrant ahead of the MC and cusp k = MC + 90 + 30*(k-1). (Contrast plain Equal, where cusp 1 = Asc.)
+function equalMcCusps(mc) {
+  return Array.from({ length: 12 }, (_, i) => norm(mc + 90 + 30 * i));
+}
+
+// Equal / 1 = Aries: 12 equal 30-degree houses fixed to the zodiac, cusp 1 at 0 degrees Aries and
+// independent of the Ascendant; cusp k = 30*(k-1).
+function equalAriesCusps() {
+  return Array.from({ length: 12 }, (_, i) => norm(30 * i));
+}
+
 // Alcabitius: trisect the Ascendant's diurnal and nocturnal semi-arcs in right ascension.
 function alcabitiusCusps(armc, asc, mc, lat, eps) {
   const decAsc = asind(sind(asc) * sind(eps));
@@ -183,6 +195,29 @@ function campanusCusps(armc, asc, mc, lat, eps) {
     norm(asc + 180), norm(c2 + 180), norm(c3 + 180), mc, c11, c12];
 }
 
+// Krušinski-Pisa-Goelzer: the house circle is the great circle through the Ascendant and the zenith.
+// It is divided into 12 equal 30-degree arcs and each division point is carried to the ecliptic along
+// its hour circle (the meridian of its right ascension). Built straight from that definition with
+// equatorial unit vectors, in the same style as Campanus above. Because the Ascendant lies on the
+// horizon it is exactly 90 degrees from the zenith, so the two directions are orthogonal and form the
+// circle's basis directly: stepping -30 degrees per house from the Ascendant toward the zenith lands
+// cusp 4 on the nadir (IC), cusp 7 on the Descendant and cusp 10 on the zenith (MC), as required.
+function krusinskiCusps(armc, asc, mc, lat, eps) {
+  // Inside the polar circle the Ascendant can fall on the far side of the meridian; keep it on the
+  // MC's side so the houses run in the intended direction.
+  const ac = arc(mc, asc) < 0 ? norm(asc + 180) : asc;
+  // Ascendant direction (on the ecliptic, so its RA meridian returns the Ascendant's longitude) and
+  // the zenith direction, both as equatorial unit vectors. They are orthogonal (Asc is on the horizon).
+  const A = [cosd(ac), sind(ac) * cosd(eps), sind(ac) * sind(eps)];
+  const Z = [cosd(lat) * cosd(armc), cosd(lat) * sind(armc), sind(lat)];
+  return Array.from({ length: 12 }, (_, i) => {
+    const phi = -30 * i;                                   // house number increases away from the zenith
+    const cphi = cosd(phi), sphi = sind(phi);
+    const px = cphi * A[0] + sphi * Z[0], py = cphi * A[1] + sphi * Z[1];
+    return raMeridianToEcliptic(atan2d(py, px), eps);      // hour circle of the step onto the ecliptic
+  });
+}
+
 // Ecliptic longitude where a house circle with equatorial normal `n` meets the ecliptic: solve
 // n·e(λ)=0 for e(λ)=(cos λ, sin λ cos ε, sin λ sin ε). The circle also meets at λ+180; caller picks.
 const circleMeetsEcliptic = (n, eps) => norm(atan2d(-n[0], n[1] * cosd(eps) + n[2] * sind(eps)));
@@ -246,6 +281,34 @@ function placidusCusps(armc, asc, mc, lat, eps) {
   return [asc, c2, c3, norm(mc + 180), norm(c11 + 180), norm(c12 + 180), norm(asc + 180), norm(c2 + 180), norm(c3 + 180), mc, c11, c12];
 }
 
+// Gauquelin sectors: 36 sectors formed by a Placidus-type division — each of the four diurnal /
+// nocturnal quadrants is split into nine equal parts of its own semi-arc (Placidus trisects; this
+// divides into ninths). Sectors are counted clockwise: sector 1 = Ascendant, 10 = MC, 19 =
+// Descendant, 28 = IC. Only the two eastern quadrants' intermediate sectors are solved (reusing the
+// same iterated semi-arc solver as Placidus); the two western quadrants are their opposite points.
+// Returns 36 ecliptic longitudes [sector1 .. sector36] (tropical). `lat` should lie outside the
+// polar circle (|lat| < 90 − eps), as the semi-arc division is otherwise undefined.
+export function gauquelinSectors(armc, lat, eps) {
+  const asc = ascendant(armc, lat, eps), mc = midheaven(armc, eps);
+  const out = new Array(36);
+  out[0] = asc; out[9] = mc; out[18] = norm(asc + 180); out[27] = norm(mc + 180);
+  // Sectors 2..9 fill the Ascendant→MC (diurnal, above-horizon) quadrant; each is a fraction (10−j)/9
+  // of its own diurnal semi-arc from the MC meridian. Sectors 20..27 are their opposite points.
+  for (let j = 2; j <= 9; j++) {
+    const c = placidusSolve(armc, lat, eps, (10 - j) / 9, false, 1);
+    out[j - 1] = c;
+    out[j + 17] = norm(c + 180);
+  }
+  // Sectors 29..36 fill the IC→Ascendant (nocturnal, below-horizon) quadrant; fraction (j−28)/9 of the
+  // nocturnal semi-arc from the IC meridian. Sectors 11..18 are their opposite points.
+  for (let j = 29; j <= 36; j++) {
+    const c = placidusSolve(armc, lat, eps, (j - 28) / 9, true, -1);
+    out[j - 1] = c;
+    out[j - 19] = norm(c + 180);
+  }
+  return out;
+}
+
 export function houseCusps(system, { armc, asc, mc, lat, eps, sunDec }) {
   switch (system) {
     case 'placidus': return placidusCusps(armc, asc, mc, lat, eps);
@@ -255,7 +318,10 @@ export function houseCusps(system, { armc, asc, mc, lat, eps, sunDec }) {
     case 'morinus': return morinusCusps(armc, eps);
     case 'vehlow': return vehlowCusps(asc);
     case 'equal': return equalCusps(asc);
+    case 'equal-mc': return equalMcCusps(mc);
+    case 'equal-aries': return equalAriesCusps();
     case 'whole-sign': return wholeSignCusps(asc);
+    case 'krusinski': return krusinskiCusps(armc, asc, mc, lat, eps);
     case 'alcabitius': return alcabitiusCusps(armc, asc, mc, lat, eps);
     case 'regiomontanus': return regiomontanusCusps(armc, asc, mc, lat, eps);
     case 'campanus': return campanusCusps(armc, asc, mc, lat, eps);
@@ -270,4 +336,4 @@ export function houseCusps(system, { armc, asc, mc, lat, eps, sunDec }) {
 }
 
 // Every system houseCusps can compute, in a stable order.
-export const HOUSE_SYSTEMS = ['placidus', 'koch', 'campanus', 'regiomontanus', 'porphyry', 'sripati', 'meridian', 'morinus', 'vehlow', 'equal', 'whole-sign', 'alcabitius', 'topocentric', 'topocentric-progressive', 'sunshine'];
+export const HOUSE_SYSTEMS = ['placidus', 'koch', 'campanus', 'regiomontanus', 'porphyry', 'sripati', 'meridian', 'morinus', 'vehlow', 'equal', 'equal-mc', 'equal-aries', 'whole-sign', 'krusinski', 'alcabitius', 'topocentric', 'topocentric-progressive', 'sunshine'];
