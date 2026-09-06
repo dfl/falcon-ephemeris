@@ -3,6 +3,7 @@
 // any system falcon supports, and aspects. Depends only on falcon's own src/ plus tz-lookup.
 
 import Ephemeris, { obliquity, apparentSiderealTime } from '../ephemeris-mit.js';
+import { ASTEROID_ELEMENTS } from '../asteroid-elements.js';
 import { houseCusps, ascendant, midheaven, HOUSE_SYSTEMS } from '../house-systems.js';
 import { deltaTSeconds } from '../delta-t.js';
 import { signOf } from './signs.js';
@@ -22,6 +23,32 @@ export const DEFAULT_BODIES = [
   'sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto',
   'chiron', 'northNode', 'southNode', 'lilith',
 ];
+
+// UI-friendly catalog of every selectable point — `{ key, label, category }`, in display order, for
+// building body pickers. The small-body entries are enumerated from ASTEROID_ELEMENTS, so this list
+// always reflects exactly what the ephemeris can compute in the current build (6 or 31 bodies).
+const BODY_LABELS = {
+  sun: 'Sun', moon: 'Moon', mercury: 'Mercury', venus: 'Venus', mars: 'Mars', jupiter: 'Jupiter',
+  saturn: 'Saturn', uranus: 'Uranus', neptune: 'Neptune', pluto: 'Pluto',
+  northNode: 'North Node', southNode: 'South Node', lilith: 'Lilith (mean)', priapus: 'Priapus (mean)',
+  trueNode: 'True Node', trueSouthNode: 'True South Node', trueLilith: 'Lilith (true)', truePriapus: 'Priapus (true)',
+  cupido: 'Cupido', hades: 'Hades', zeus: 'Zeus', kronos: 'Kronos', apollon: 'Apollon', admetos: 'Admetos', vulkanus: 'Vulkanus', poseidon: 'Poseidon',
+};
+// Small-body taxonomy for grouping (a body not listed here defaults to 'asteroid'). Covers bodies
+// that may appear in the element table across builds; only those actually in ASTEROID_ELEMENTS are
+// emitted below.
+const CENTAURS = new Set(['chiron', 'pholus', 'chariklo', 'nessus', 'okyrhoe']);
+const TNOS = new Set(['eris', 'sedna', 'makemake', 'quaoar', 'haumea', 'gonggong', 'orcus', 'salacia', 'varuna', 'ixion']);
+const PLANET_KEYS = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'];
+const POINT_KEYS = ['northNode', 'southNode', 'lilith', 'priapus', 'trueNode', 'trueSouthNode', 'trueLilith', 'truePriapus'];
+const URANIAN_KEYS = ['cupido', 'hades', 'zeus', 'kronos', 'apollon', 'admetos', 'vulkanus', 'poseidon'];
+const capitalize = s => s.charAt(0).toUpperCase() + s.slice(1);
+export const BODIES = Object.freeze([
+  ...PLANET_KEYS.map(k => ({ key: k, label: BODY_LABELS[k], category: k === 'sun' || k === 'moon' ? 'luminary' : 'planet' })),
+  ...POINT_KEYS.map(k => ({ key: k, label: BODY_LABELS[k], category: 'point' })),
+  ...Object.keys(ASTEROID_ELEMENTS).map(k => ({ key: k, label: BODY_LABELS[k] ?? capitalize(k), category: CENTAURS.has(k) ? 'centaur' : TNOS.has(k) ? 'tno' : 'asteroid' })),
+  ...URANIAN_KEYS.map(k => ({ key: k, label: BODY_LABELS[k], category: 'uranian' })),
+].map(Object.freeze));
 
 export { HOUSE_SYSTEMS };
 

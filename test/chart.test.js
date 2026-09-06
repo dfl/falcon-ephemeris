@@ -70,6 +70,20 @@ describe('chart — deterministic UTC natal', () => {
     expect(sep(c.bodies.trueNode.longitude, c.bodies.trueSouthNode.longitude)).toBeGreaterThan(179.9);
   });
 
+  it('BODIES catalog is UI-ready and every entry is selectable', async () => {
+    const { BODIES } = await import('../src/chart/index.js');
+    // Every entry has a key, a human label, and a known category.
+    const cats = new Set(['luminary', 'planet', 'point', 'asteroid', 'centaur', 'tno', 'uranian']);
+    for (const b of BODIES) {
+      expect(b.key, JSON.stringify(b)).toBeTypeOf('string');
+      expect(b.label, b.key).toBeTruthy();
+      expect(cats.has(b.category), `${b.key}: ${b.category}`).toBe(true);
+    }
+    // Requesting the whole catalog by key resolves every one of them (true node/apsides included).
+    const c = await chart({ when: UTC_1990, place: NY, bodies: BODIES.map(b => b.key) });
+    for (const b of BODIES) expect(c.bodies[b.key], `${b.key} not selectable`).toBeTruthy();
+  });
+
   it('rejects an unknown house system', async () => {
     await expect(chart({ when: UTC_1990, place: NY, houseSystem: 'nope' })).rejects.toThrow(/unknown houseSystem/);
   });

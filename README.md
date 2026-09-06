@@ -98,7 +98,14 @@ c.meta;              // { utc, zone, julianDay, deltaT, obliquity, siderealTime,
 ```
 
 `chart` exports `signOf`, `SIGNS`, `findAspects`, `ASPECTS`, `resolveUTC`,
-`ayanamsha`, `AYANAMSHAS`, and `HOUSE_SYSTEMS` alongside it.
+`ayanamsha`, `AYANAMSHAS`, `HOUSE_SYSTEMS`, `DEFAULT_BODIES`, and `BODIES` alongside it.
+
+`BODIES` is a UI-ready catalog of every selectable point — `{ key, label, category }`
+in display order (`category` is one of `luminary`, `planet`, `point`, `asteroid`,
+`centaur`, `tno`, `uranian`) — for building a body picker. Pass any subset of its keys
+as `bodies`, or `bodies: 'all'`. Points include the mean and true (osculating) lunar
+node and the mean and interpolated ("true") Lilith / Priapus. The small-body entries
+are enumerated from the element table, so the list matches exactly what the build ships.
 
 `HOUSE_SYSTEMS` covers Placidus, Koch, Campanus, Regiomontanus, Porphyry, Sripati,
 Meridian, Morinus, Vehlow, Equal, Equal-MC, Equal/1=Aries, Whole-sign, Krušinski,
