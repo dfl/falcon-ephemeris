@@ -24,6 +24,41 @@ function meanLunarApogee(T) {
   return norm360(Om + Math.atan2(Math.cos(MOON_MEAN_INCL * DEG) * Math.sin(u * DEG), Math.cos(u * DEG)) / DEG);
 }
 
+// Interpolated lunar apse longitude (deg, ecliptic of date): the Moon's longitude at its real
+// distance extremum — apogee = "true" Black Moon Lilith, perigee = "true" Priapus, as distinct from
+// the mean apse line. Locate the apsis passages of the wanted kind bracketing the moment (Astronomy
+// Engine's alternating apogee/perigee search), take the Moon's longitude at each passage, and
+// interpolate to the moment: a Lagrange parabola through the nearest three passages (linear if only
+// two are available). `baseDate` is the UTC moment; `jd` its UT Julian day. Returns null if no
+// passages are found. Apogee is stable to ~0.1°; perigee has a fast intra-month wobble that monthly
+// passages cannot fully resolve (a known limitation of the passage-interpolation approach).
+function interpApseLon(baseDate, jd, apocenter) {
+  const want = apocenter ? A.ApsisKind.Apocenter : A.ApsisKind.Pericenter;
+  const moonLonAt = ut => { const at = A.MakeTime(ut); at.tt = at.ut + deltaTSeconds(at.ut + J2000) / 86400; return norm360(A.EclipticGeoMoon(at).lon); };
+  const apses = [];
+  let a = A.SearchLunarApsis(new Date(baseDate.getTime() - 45 * 86400000));
+  for (let n = 0; n < 16; n++) {
+    const ajd = a.time.ut + J2000;
+    if (a.kind === want) apses.push([ajd, moonLonAt(a.time.ut)]);
+    if (ajd > jd + 45) break;
+    a = A.NextLunarApsis(a);
+  }
+  if (apses.length < 2) return null;
+  apses.sort((p, q) => Math.abs(p[0] - jd) - Math.abs(q[0] - jd));
+  apses.length = Math.min(3, apses.length);
+  apses.sort((p, q) => p[0] - q[0]);
+  // Unwrap the passage longitudes about the first so the slowly advancing apse line stays continuous.
+  const base = apses[0][1];
+  const pts = apses.map(([tt, l]) => [tt, base + norm180(l - base)]);
+  let y = 0;
+  for (let i = 0; i < pts.length; i++) {
+    let term = pts[i][1];
+    for (let j = 0; j < pts.length; j++) if (i !== j) term *= (jd - pts[j][0]) / (pts[i][0] - pts[j][0]);
+    y += term;
+  }
+  return norm360(y);
+}
+
 // Fixed heliocentric osculating elements for the (hypothetical) Uranian TNPs: the James Neely
 // element set (equinox/epoch J1900). a in AU, angles in degrees, M0 = mean anomaly at epoch.
 // Real bodies (Eris + asteroids + Chiron) use the fitted Horizons table instead.
@@ -210,11 +245,15 @@ export default class Ephemeris {
       const hx = r.y * v.z - r.z * v.y, hy = r.z * v.x - r.x * v.z;
       return norm360(Math.atan2(hx, -hy) / DEG);
     })();
+    // Interpolated ("true") apogee/perigee: the Moon's longitude at its real distance extrema.
+    const intpApogee = interpApseLon(new Date(baseMs), t.ut + J2000, true);
+    const intpPerigee = interpApseLon(new Date(baseMs), t.ut + J2000, false);
     moon.position.apparentGeocentric = { longitude: mHere.longitude * DEG, latitude: mHere.latitude * DEG, distance: mHere.distance };
     moon.orbit = {
       meanAscendingNode: { apparentLongitude: node }, meanDescendingNode: { apparentLongitude: norm360(node + 180) },
       trueAscendingNode: { apparentLongitude: trueNode }, trueDescendingNode: { apparentLongitude: norm360(trueNode + 180) },
       meanApogee: { apparentLongitude: apogee }, meanPerigee: { apparentLongitude: norm360(apogee + 180) },
+      trueApogee: { apparentLongitude: intpApogee }, truePerigee: { apparentLongitude: intpPerigee == null ? null : norm360(intpPerigee) },
     };
     this.Results.push({ key: 'moon', ...moon });
     // Uranian TNPs (fixed Neely elements) and Eris/asteroids/Chiron (tabulated Horizons elements): both

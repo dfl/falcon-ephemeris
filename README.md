@@ -28,8 +28,9 @@ The `src/` library has a single runtime dependency:
   osculating-element table; the eight Uranian TNPs (Cupido, Hades, Zeus, Kronos,
   Apollon, Admetos, Vulkanus, Poseidon) from the fixed Neely elements.
 - **True (osculating) lunar node** from the Moon's state vector, alongside the mean
-  node; **Black Moon Lilith / Priapus** (mean apogee / perigee); **sidereal**
-  (Fagan–Bradley) alongside tropical.
+  node; **Black Moon Lilith / Priapus** as both the mean apogee / perigee and the
+  interpolated ("true") apogee / perigee (the Moon's longitude at its real distance
+  extrema); **sidereal** (Fagan–Bradley) alongside tropical.
 
 ## Install
 

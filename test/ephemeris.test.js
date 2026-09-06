@@ -48,6 +48,15 @@ describe('ephemeris shim structure', () => {
     expect(moon.orbit.meanDescendingNode.apparentLongitude).toBeTypeOf('number');
     expect(moon.orbit.meanApogee.apparentLongitude).toBeTypeOf('number');
   });
+  it('provides the true node and interpolated apogee/perigee, near their mean counterparts', () => {
+    const sep = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
+    const moon = eph.Results.find((r) => r.key === 'moon').orbit;
+    // True node librates within ~1.6° of the mean node; the interpolated apogee (stable) stays within
+    // a few degrees of the mean apogee. Both true/interp fields are present and finite.
+    expect(sep(moon.trueAscendingNode.apparentLongitude, moon.meanAscendingNode.apparentLongitude)).toBeLessThan(2);
+    expect(sep(moon.trueApogee.apparentLongitude, moon.meanApogee.apparentLongitude)).toBeLessThan(8);
+    expect(moon.truePerigee.apparentLongitude).toBeTypeOf('number');
+  });
   it('flags retrograde motion as a boolean', () => {
     for (const r of eph.Results) expect(r.motion.isRetrograde).toBeTypeOf('boolean');
   });
