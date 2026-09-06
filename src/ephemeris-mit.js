@@ -201,8 +201,21 @@ export default class Ephemeris {
     const moon = bodyRecord(moonAt, t, tMinus, tPlus, H), mHere = moonAt(t), T = t.tt / 36525.0;
     const node = norm360(125.0445479 - 1934.1362891 * T + 0.0020754 * T * T + T * T * T / 467441 - T * T * T * T / 60616000);
     const apogee = meanLunarApogee(T);
+    // True (osculating) node: longitude of the ascending node of the Moon's instantaneous orbital
+    // plane. From the geocentric state (position × velocity) rotated to the ecliptic of date, the
+    // orbital angular momentum h gives the node line ẑ×h = (-h.y, h.x, 0), so Ω = atan2(h.x, -h.y).
+    const trueNode = (() => {
+      const s = A.GeoMoonState(t), rot = A.Rotation_EQJ_ECT(t);
+      const r = matMul(rot, { x: s.x, y: s.y, z: s.z }), v = matMul(rot, { x: s.vx, y: s.vy, z: s.vz });
+      const hx = r.y * v.z - r.z * v.y, hy = r.z * v.x - r.x * v.z;
+      return norm360(Math.atan2(hx, -hy) / DEG);
+    })();
     moon.position.apparentGeocentric = { longitude: mHere.longitude * DEG, latitude: mHere.latitude * DEG, distance: mHere.distance };
-    moon.orbit = { meanAscendingNode: { apparentLongitude: node }, meanDescendingNode: { apparentLongitude: norm360(node + 180) }, meanApogee: { apparentLongitude: apogee }, meanPerigee: { apparentLongitude: norm360(apogee + 180) } };
+    moon.orbit = {
+      meanAscendingNode: { apparentLongitude: node }, meanDescendingNode: { apparentLongitude: norm360(node + 180) },
+      trueAscendingNode: { apparentLongitude: trueNode }, trueDescendingNode: { apparentLongitude: norm360(trueNode + 180) },
+      meanApogee: { apparentLongitude: apogee }, meanPerigee: { apparentLongitude: norm360(apogee + 180) },
+    };
     this.Results.push({ key: 'moon', ...moon });
     // Uranian TNPs (fixed Neely elements) and Eris/asteroids/Chiron (tabulated Horizons elements): both
     // go through the same keplerGeoEQJ apparent-place reduction.
