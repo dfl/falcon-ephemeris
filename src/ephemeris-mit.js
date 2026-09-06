@@ -1,4 +1,6 @@
-// Ephemeris engine: geocentric apparent ecliptic longitudes. Positions from
+// Ephemeris engine: geocentric apparent places. Each Result carries `position` (ecliptic
+// longitude + latitude, apparent RA/declination of date, and distance in AU), `speed` (per-day rates
+// for each of those, by central difference), and `motion.isRetrograde`. Positions from
 // Astronomy Engine (MIT); Eris + the major asteroids + Chiron from a fitted table of JPL Horizons
 // osculating elements; the Uranian TNPs from a two-body Kepler solve of their fixed "Neely"
 // osculating elements.
@@ -113,6 +115,52 @@ function keplerGeoEQJ(el, t) {
   return { x: gx + est.vx / C_AUD * gm, y: gy + est.vy / C_AUD * gm, z: gz + est.vz / C_AUD * gm };
 }
 function eclLon(vecEQJ, rotEqjEct) { const e = matMul(rotEqjEct, vecEQJ); return norm360(Math.atan2(e.y, e.x) / DEG); }
+// Full apparent place from a geocentric apparent EQJ vector (already light-time/deflection/aberration
+// corrected): ecliptic longitude/latitude of date + apparent right ascension/declination of date, in
+// degrees, and geocentric distance in AU. `time` supplies the of-date rotations (EQJ→ecliptic and
+// EQJ→true equator), which drift slowly, so evaluating them per-sample keeps finite-difference speeds
+// self-consistent. The equatorial pair matches Swiss Ephemeris' SEFLG_EQUATORIAL output.
+function apparentPlace(vecEQJ, time) {
+  const ect = matMul(A.Rotation_EQJ_ECT(time), vecEQJ);
+  const eqd = matMul(A.Rotation_EQJ_EQD(time), vecEQJ);
+  const rEcl = Math.hypot(ect.x, ect.y, ect.z), rEq = Math.hypot(eqd.x, eqd.y, eqd.z);
+  return {
+    longitude: norm360(Math.atan2(ect.y, ect.x) / DEG),
+    latitude: Math.asin(ect.z / rEcl) / DEG,
+    distance: rEcl,
+    rightAscension: norm360(Math.atan2(eqd.y, eqd.x) / DEG),
+    declination: Math.asin(eqd.z / rEq) / DEG,
+  };
+}
+// Central-difference angular/linear rates (per day) from two apparent places 2h days apart. Longitude
+// and right ascension are unwrapped so a 359°→1° crossing reads as a small positive rate.
+function ratesBetween(minus, plus, h) {
+  const per = (b, a) => (b - a) / (2 * h);
+  return {
+    longitude: norm180(plus.longitude - minus.longitude) / (2 * h),
+    latitude: per(plus.latitude, minus.latitude),
+    distance: per(plus.distance, minus.distance),
+    rightAscension: norm180(plus.rightAscension - minus.rightAscension) / (2 * h),
+    declination: per(plus.declination, minus.declination),
+  };
+}
+// Assemble the enriched `position`/`speed`/`motion` record every Result carries. `at` maps a time to
+// an apparent place; sampled at t and t±h for instantaneous rates.
+function bodyRecord(at, t, tMinus, tPlus, h) {
+  const here = at(t), before = at(tMinus), after = at(tPlus);
+  const speed = ratesBetween(before, after, h);
+  return {
+    position: {
+      apparentLongitude: here.longitude,
+      apparentLatitude: here.latitude,
+      distance: here.distance,
+      rightAscension: here.rightAscension,
+      declination: here.declination,
+    },
+    speed,
+    motion: { isRetrograde: speed.longitude < 0 },
+  };
+}
 // True obliquity of the ecliptic (deg) for a UTC Date: IAU 2006 precession + nutation.
 // (Astronomy Engine's precession agrees with Vondrak to <0.05" over 1900-2100.)
 export function obliquity(utcDate) { return A.e_tilt(makeTime(utcDate)).tobl; }
@@ -131,28 +179,41 @@ function tabElementsAt(rows, jd) {
 
 export default class Ephemeris {
   constructor({ year = 0, month = 0, day = 0, hours = 0, minutes = 0, seconds = 0 } = {}) {
-    const t = makeTime(new Date(Date.UTC(year, month, day, hours, minutes, seconds)));
-    const tN = makeTime(new Date(Date.UTC(year, month, day, hours, minutes, seconds) + 43200000)); // +0.5d for retro
-    const rot = A.Rotation_EQJ_ECT(t), rotN = A.Rotation_EQJ_ECT(tN);
-    const retro = (l1, l2) => norm180(l2 - l1) < 0;
+    const baseMs = Date.UTC(year, month, day, hours, minutes, seconds);
+    const H = 1 / 48; // ±30 min central-difference step for instantaneous rates
+    const t = makeTime(new Date(baseMs));
+    const tMinus = makeTime(new Date(baseMs - H * 86400000));
+    const tPlus = makeTime(new Date(baseMs + H * 86400000));
     this.Results = [];
+    // Sun–Pluto (Astronomy Engine): one aberration-corrected EQJ vector feeds longitude, latitude,
+    // distance, and apparent RA/dec, so the longitude is bit-identical to the previous release.
     for (const [key, body] of Object.entries(AE_BODIES)) {
-      const lon = eclLon(A.GeoVector(body, t, true), rot), lonN = eclLon(A.GeoVector(body, tN, true), rotN);
-      this.Results.push({ key, position: { apparentLongitude: lon }, motion: { isRetrograde: retro(lon, lonN) } });
+      const at = time => apparentPlace(A.GeoVector(body, time, true), time);
+      this.Results.push({ key, ...bodyRecord(at, t, tMinus, tPlus, H) });
     }
-    const m = A.EclipticGeoMoon(t), T = t.tt / 36525.0;
+    // Moon: keep the validated EclipticGeoMoon longitude/latitude/distance; take apparent RA/dec from
+    // its geocentric EQJ vector rotated to the true equator of date.
+    const moonAt = time => {
+      const m = A.EclipticGeoMoon(time), eqd = matMul(A.Rotation_EQJ_EQD(time), A.GeoVector(A.Body.Moon, time, true));
+      const rEq = Math.hypot(eqd.x, eqd.y, eqd.z);
+      return { longitude: norm360(m.lon), latitude: m.lat, distance: m.dist, rightAscension: norm360(Math.atan2(eqd.y, eqd.x) / DEG), declination: Math.asin(eqd.z / rEq) / DEG };
+    };
+    const moon = bodyRecord(moonAt, t, tMinus, tPlus, H), mHere = moonAt(t), T = t.tt / 36525.0;
     const node = norm360(125.0445479 - 1934.1362891 * T + 0.0020754 * T * T + T * T * T / 467441 - T * T * T * T / 60616000);
     const apogee = meanLunarApogee(T);
-    this.Results.push({ key: 'moon', position: { apparentLongitude: norm360(m.lon), apparentGeocentric: { longitude: norm360(m.lon) * DEG, latitude: m.lat * DEG, distance: m.dist } }, motion: { isRetrograde: false }, orbit: { meanAscendingNode: { apparentLongitude: node }, meanDescendingNode: { apparentLongitude: norm360(node + 180) }, meanApogee: { apparentLongitude: apogee }, meanPerigee: { apparentLongitude: norm360(apogee + 180) } } });
+    moon.position.apparentGeocentric = { longitude: mHere.longitude * DEG, latitude: mHere.latitude * DEG, distance: mHere.distance };
+    moon.orbit = { meanAscendingNode: { apparentLongitude: node }, meanDescendingNode: { apparentLongitude: norm360(node + 180) }, meanApogee: { apparentLongitude: apogee }, meanPerigee: { apparentLongitude: norm360(apogee + 180) } };
+    this.Results.push({ key: 'moon', ...moon });
+    // Uranian TNPs (fixed Neely elements) and Eris/asteroids/Chiron (tabulated Horizons elements): both
+    // go through the same keplerGeoEQJ apparent-place reduction.
     for (const el of ELEMENTS) {
-      const lon = eclLon(keplerGeoEQJ(el, t), rot), lonN = eclLon(keplerGeoEQJ(el, tN), rotN);
-      this.Results.push({ key: el.key, position: { apparentLongitude: lon }, motion: { isRetrograde: retro(lon, lonN) } });
+      const at = time => apparentPlace(keplerGeoEQJ(el, time), time);
+      this.Results.push({ key: el.key, ...bodyRecord(at, t, tMinus, tPlus, H) });
     }
     for (const key of Object.keys(ASTEROID_ELEMENTS)) {
       const rows = ASTEROID_ELEMENTS[key];
-      const lon = eclLon(keplerGeoEQJ(tabElementsAt(rows, t.tt + J2000), t), rot);
-      const lonN = eclLon(keplerGeoEQJ(tabElementsAt(rows, tN.tt + J2000), tN), rotN);
-      this.Results.push({ key, position: { apparentLongitude: lon }, motion: { isRetrograde: retro(lon, lonN) } });
+      const at = time => apparentPlace(keplerGeoEQJ(tabElementsAt(rows, time.tt + J2000), time), time);
+      this.Results.push({ key, ...bodyRecord(at, t, tMinus, tPlus, H) });
     }
   }
 }
