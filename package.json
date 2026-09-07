@@ -1,6 +1,6 @@
 {
   "name": "falcon-ephemeris",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Clean-room, dual-licensed (AGPL-3.0/commercial) ephemeris: geocentric ecliptic longitudes for Sun–Pluto, Moon, Eris, the major asteroids, Chiron, and the Uranian TNPs, plus house cusps and a corrected ΔT.",
   "type": "module",
   "main": "./src/index.js",
