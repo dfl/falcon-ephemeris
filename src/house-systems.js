@@ -32,6 +32,13 @@ export function ascendant(armc, lat, eps) {
   return norm(atan2d(cosd(armc), -(sind(armc) * cosd(eps) + tand(lat) * sind(eps))));
 }
 
+// Vertex (ecliptic longitude) — the point on the western horizon that is rising, i.e. the Ascendant
+// taken at the anti-meridian (armc + 180) and the observer's co-latitude. Antivertex is +180.
+export function vertex(armc, lat, eps) {
+  const colat = lat < 0 ? -(90 - Math.abs(lat)) : 90 - Math.abs(lat);
+  return ascendant(norm(armc + 180), colat, eps);
+}
+
 // Signed shortest arc a->b in (-180, 180].
 function arc(a, b) { let d = ((b - a) % 360 + 540) % 360 - 180; return d; }
 function midpoint(a, b) { return norm(a + arc(a, b) / 2); }
