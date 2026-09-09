@@ -3,7 +3,7 @@
 // dependency) so coordinate→timezone lookup works in the browser; timezone offsets use the
 // platform's built-in Intl.
 export {
-  chart, HOUSE_SYSTEMS, AYANAMSHAS,
+  chart, BODIES, DEFAULT_BODIES, HOUSE_SYSTEMS, AYANAMSHAS,
   signOf, SIGNS, findAspects, ASPECTS, ayanamsha, resolveUTC, spaceAngles,
 } from '../src/chart/index.js';
 export { default as Ephemeris, obliquity, apparentSiderealTime } from '../src/ephemeris-mit.js';
